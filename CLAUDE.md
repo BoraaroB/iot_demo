@@ -62,6 +62,8 @@ docs/   skills/   docker-compose.yml   .env.example
 Each service: `package.json`, `tsconfig`, `src/`, Dockerfile (multi-stage, non-root, healthcheck), env config, `/health` (process only), `/ready` (dependencies), structured logging, error handling, smoke test.
 Services never import another service's source. Communicate via HTTP, Kafka or MQTT. Shared code lives in `packages/`.
 
+Each `tsconfig.json` extends root `tsconfig.base.json` and sets `"composite": true`; register it in root `tsconfig.json`'s `references`. Root `npm run typecheck` runs `tsc --build`.
+
 ## Contracts
 
 MQTT topics:
