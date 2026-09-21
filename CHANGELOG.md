@@ -18,6 +18,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Each com
 - `packages/config`: `loadEnv(schema)` — Zod-validated `process.env` loading with a `baseEnvSchema` (`NODE_ENV`, `LOG_LEVEL`) services extend.
 - Root `tsconfig.json` (TS project references) + `npm run typecheck` (`tsc --build`).
 - `services/{api-gateway,iot-ingestion,telemetry,vehicle,alert,realtime,simulator}`: skeleton Express apps with `/health` (process only), `/ready` (placeholder — mirrors `/health` until each service has a real dependency to check), `pino-http` structured request logging, JSON 404 + error-handling middleware, Zod-validated env config (`@iiot/config`'s `baseEnvSchema` + `PORT`), and graceful shutdown on `SIGTERM`/`SIGINT`. Each depends on `@iiot/{types,events,logger,config}` and is registered in the root `tsconfig.json` project references.
+- Multi-stage `Dockerfile` for all 7 services (`node:24-alpine`; `deps` → `build` (`tsc --build`) → `prod-deps` (`npm ci --omit=dev`) → `runtime`), non-root `iiot` user, `EXPOSE`/`HEALTHCHECK` hitting `/health` via Node's built-in `fetch` (no curl/wget in the image). Generated from `infrastructure/docker/Dockerfile.service.template` via `infrastructure/docker/generate-dockerfiles.sh` (7 services currently share identical dependency sets — edit the template, not the per-service copies). `.dockerignore` added at repo root.
 
 ### Notes
 - TypeScript pinned to `^6.0.3` (not `7.0.2`) — `typescript-eslint@8.70.0` doesn't yet support TS 7's peer range.
