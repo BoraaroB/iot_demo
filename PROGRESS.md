@@ -6,10 +6,10 @@
 ## Current position
 
 - **Phase:** 0 — Bootstrap
-- **Step:** 0.2 done (npm workspaces root, shared TS config, lint/format tooling)
+- **Step:** 0.3 done (`packages/`: types, events, logger, config)
 - **Branch:** `main`
 - **Last tag:** none
-- **Next step:** 0.3 — `packages/` (config, logger, events, types). First real `.ts` code — also when root `tsconfig.json` (solution file with `references`) and the `typecheck` script get created, since `tsc` needs at least one input to run.
+- **Next step:** 0.4 — service skeletons (7 services) with `/health`, `/ready`, logging, error handler, each depending on `@iiot/{types,events,logger,config}`
 
 Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 
@@ -18,7 +18,7 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 - [~] **Phase 0 — Bootstrap** → `v0.1.0`
   - [x] 0.1 git init, `.gitignore`, `CLAUDE.md`, `PROGRESS.md`, `CHANGELOG.md`
   - [x] 0.2 npm workspaces root, shared TS config, lint + format scripts (typecheck script deferred to 0.3 — no `.ts` files exist yet)
-  - [ ] 0.3 `packages/` — config, logger (Pino), events (EventEnvelope + Zod), types
+  - [x] 0.3 `packages/` — types (EventEnvelope + id aliases), events (topics + envelope create/parse via Zod), logger (Pino wrapper), config (env loader via Zod). Root `tsconfig.json` (project references) + `typecheck` script added.
   - [ ] 0.4 service skeletons (7) with `/health`, `/ready`, logging, error handler
   - [ ] 0.5 Dockerfiles (multi-stage, non-root)
   - [ ] 0.6 `docker-compose.yml` — Kafka (KRaft), Postgres, TimescaleDB, Redis, EMQX, Kafka UI
@@ -44,6 +44,7 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 |---|---|---|
 | 2026-09-21 | `git init -b main` | PASS |
 | 2026-09-21 | `npm install`, `npm run lint`, `npm run format:check`, `npx tsc --version` | PASS |
+| 2026-09-21 | `npm run typecheck`, `npm run lint`, `npm run format:check`, runtime check via `tsx` (logger/config/events exercised end-to-end) | PASS |
 
 ## Environment (verified 2026-09-21)
 
@@ -55,6 +56,9 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 - 2026-09-21: **TypeScript pinned to `^6.0.3`, not the newest `7.0.2`.** TS 7 (native/Go-ported compiler) shipped ~2026-07 and `typescript-eslint@8.70.0`'s peer range is still `<6.1.0` — installing TS 7 breaks `npm install` (ERESOLVE). Revisit once typescript-eslint supports TS 7.
 - 2026-09-21: ESLint flat config lives in `eslint.config.mjs` (forced ESM via extension, independent of root `package.json` `"type"`), using the unified `typescript-eslint` package + `projectService: true` for type-aware linting.
 - 2026-09-21: **TS project references convention** — every future `packages/*`, `services/*`, `apps/*` gets its own `tsconfig.json` extending `../../tsconfig.base.json` with `"composite": true`. The root `tsconfig.json` (solution file, `"files": []` + `"references": [...]`) and the root `typecheck` script (`tsc --build tsconfig.json`) are created in step 0.3 alongside the first real package — `tsc` errors (`TS18002`/`TS18003`) if it has zero inputs, so an empty solution file can't exist before then.
+- 2026-09-21: **`tsconfig.base.json` sets `"types": ["node"]` explicitly.** Without it, `tsc --build` non-deterministically failed to resolve Node globals (`process`, `node:crypto`) in some workspace packages (`packages/config`, `packages/events`) but not others (`packages/logger`, whose `pino` import transitively pulled in `@types/node` via its own `.d.ts`) — a real, reproduced TS auto-`@types`-inclusion quirk in this composite-project setup, not a guess. Explicit `"types"` is standard practice for monorepos for exactly this reason.
+- 2026-09-21: Package naming: `@iiot/{types,events,logger,config}`, all `private: true` workspace packages, ESM (`"type": "module"`), built via `tsc --build` (composite) — `main`/`types` point at `dist/`, so services must consume the built output, not `src/` directly.
+- 2026-09-21: **zod v4 API used correctly** — `z.uuid()` / `z.iso.datetime()` (top-level functions), not the deprecated `z.string().uuid()` / `.datetime()` chained methods. Verified against the installed package's `.d.ts`, not assumed from training data.
 
 ## Known issues
 

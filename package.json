@@ -13,11 +13,14 @@
     "npm": ">=10.0.0"
   },
   "scripts": {
+    "typecheck": "tsc --build tsconfig.json",
+    "clean": "tsc --build tsconfig.json --clean",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "@types/node": "^24.13.6",
     "typescript": "^6.0.3",
     "eslint": "^10.11.0",
     "@eslint/js": "^10.0.1",
@@ -27,6 +30,7 @@
     "tsx": "^4.23.15"
   },
   "allowScripts": {
-    "esbuild@0.28.2": true
+    "esbuild@0.28.2": true,
+    "fsevents@2.3.3": true
   }
 }
