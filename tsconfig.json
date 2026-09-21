@@ -5,6 +5,13 @@
     { "path": "packages/types" },
     { "path": "packages/events" },
     { "path": "packages/logger" },
-    { "path": "packages/config" }
+    { "path": "packages/config" },
+    { "path": "services/api-gateway" },
+    { "path": "services/iot-ingestion" },
+    { "path": "services/telemetry" },
+    { "path": "services/vehicle" },
+    { "path": "services/alert" },
+    { "path": "services/realtime" },
+    { "path": "services/simulator" }
   ]
 }
