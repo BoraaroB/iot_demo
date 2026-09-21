@@ -23,7 +23,7 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
   - [ ] 0.5 Dockerfiles (multi-stage, non-root)
   - [ ] 0.6 `docker-compose.yml` — Kafka (KRaft), Postgres, TimescaleDB, Redis, EMQX, Kafka UI
   - [ ] 0.7 `npm run smoke` (health/ready of all services)
-  - [ ] 0.8 `docs/` (only what exists)
+  - [ ] 0.8 `docs/` (only what exists) + trim `CLAUDE.md` to ~80–90 lines: move Git/API versioning, Contracts and Repository layout into `docs/` / `README.md`, keep one-line links
   - [ ] 0.9 `skills/` (14 short, project-specific skills)
   - [ ] 0.10 full verification → tag `v0.1.0`
 - [ ] **Phase 1 — Telemetry pipeline E2E** (simulator → MQTT → ingestion → Kafka → telemetry → TimescaleDB) → `v0.2.0`
@@ -47,6 +47,10 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 ## Environment (verified 2026-09-21)
 
 - Node `v24.18.0`, npm `11.16.0`, Docker `29.4.0`, Docker Compose `v5.1.1`. pnpm not installed.
+
+## Decisions
+
+- 2026-09-21: Single main agent. Subagents only when the user asks or for truly independent work (skills writing, code review, frontend/backend in separate worktrees after Phase 2 contracts are stable).
 
 ## Known issues
 
