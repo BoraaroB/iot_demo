@@ -8,6 +8,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Each com
 ## [Unreleased]
 
 ### Added
+- `telemetry` Kafka → TimescaleDB: `node-pg-migrate` migration creating the `telemetry` hypertable (device time, `UNIQUE (event_id, time)`, `(vehicle_id, time DESC)` index), applied at startup under an advisory lock. kafkajs consumer on `vehicle.telemetry` (group `telemetry`) validates envelopes + payloads with `@iiot/events`, skips invalid messages (logged with Zod issues), and inserts in chunks via `unnest` with `ON CONFLICT DO NOTHING`. Offsets are resolved per inserted chunk. Graceful shutdown: consumer disconnect → pool end → HTTP close, 10s hard limit. New env: `DATABASE_URL` (required), `DB_POOL_MAX`, `KAFKA_BROKERS`, `KAFKA_CLIENT_ID`, `KAFKA_GROUP_ID`.
+- `npm run smoke:telemetry` (`scripts/smoke-telemetry.mjs`): real Kafka + TimescaleDB test. Checks the hypertable and migration record; duplicate and invalid messages must not create rows; the 2 valid events must be stored once with intact values; the service must exit 0 on `SIGTERM`; committed offsets must pass the produced messages.
 - `iot-ingestion` MQTT → Kafka bridge: EMQX shared subscription (QoS 1) to `factory/+/vehicle/+/telemetry` and `.../status`; identity taken from the topic; JSON + Zod payload validation (invalid messages logged and dropped); `EventEnvelope` produced to `vehicle.telemetry` / `vehicle.status` with key = `vehicleId`, `acks: -1`; in-flight sends capped (`INGEST_MAX_IN_FLIGHT`); kafkajs logs routed through Pino; graceful shutdown (stop MQTT → drain → disconnect Kafka → close HTTP, 10s hard limit). New env: `MQTT_URL`, `MQTT_CLIENT_ID`, `MQTT_SHARED_GROUP`, `KAFKA_BROKERS`, `KAFKA_CLIENT_ID`, `INGEST_MAX_IN_FLIGHT`.
 - `@iiot/events`: `telemetryPayloadSchema`, `statusPayloadSchema`, `vehicleStatuses`, `eventTypes`, `PAYLOAD_SCHEMA_VERSION` (1); documented in `docs/contracts.md` "Payloads".
 - `npm run smoke:ingestion` (`scripts/smoke-ingestion.mjs`): real EMQX + Kafka test. Invalid messages must be dropped; valid ones must arrive exactly once as envelopes keyed by `vehicleId`; the service must exit 0 on `SIGTERM`.
@@ -15,6 +17,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Each com
 - `npm run smoke:kafka` (`scripts/smoke-kafka.mjs`): checks that the topics on the running broker match `kafkaTopics` from `@iiot/events`. Fails on a missing contract topic or an unexpected `vehicle.*` topic.
 
 ### Changed
+- `telemetry` `/ready` now reports `{"db","kafka"}` (DB: migrations applied + periodic `SELECT 1`; Kafka: group joined + broker probe). `npm run smoke` runs it against unreachable DB/broker and expects 503.
+- Root devDependencies: `pg` (used by `smoke:telemetry`).
 - `iot-ingestion` `/ready` now reports real dependency state: `200`/`503` with `{"status","checks":{"mqtt","kafka"}}`. Kafka state comes from a periodic `describeCluster` probe.
 - `npm run smoke`: `iot-ingestion` runs against unreachable brokers and must report `/ready` 503. A service that needs `SIGKILL` after `SIGTERM` now fails the test.
 - Root devDependencies: `mqtt`, `kafkajs` (used directly by the smoke scripts).
