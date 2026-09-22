@@ -21,7 +21,9 @@
     "smoke": "node scripts/smoke.mjs",
     "smoke:kafka": "node scripts/smoke-kafka.mjs",
     "smoke:ingestion": "node scripts/smoke-ingestion.mjs",
-    "smoke:telemetry": "node scripts/smoke-telemetry.mjs"
+    "smoke:telemetry": "node scripts/smoke-telemetry.mjs",
+    "smoke:simulator": "node scripts/smoke-simulator.mjs",
+    "simulate": "node services/simulator/dist/index.js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
