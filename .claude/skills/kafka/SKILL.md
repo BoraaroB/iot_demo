@@ -11,13 +11,15 @@ Kafka is the backbone between ingestion and the three domain consumers (`telemet
 plus `realtime`. Getting topic/partition/idempotency conventions right early avoids a schema-registry-style
 retrofit later (which `CLAUDE.md` explicitly says to avoid).
 
-## Current state (as of Phase 0)
+## Current state (as of step 1.1)
 
 Broker is up in `docker-compose.yml` (`apache/kafka:4.3.1`, KRaft mode, single-node combined
-broker+controller). No topics created yet — deliberately deferred to Phase 1, when producers/consumers
-actually exist. Relying on `auto.create.topics.enable` only was for the Phase 0 smoke check
-(throwaway `smoke.test` topic); real topics for Phase 1 should be created explicitly (via a startup script
-or `kafka-topics.sh`), not left to auto-create, so partition count/replication are deliberate.
+broker+controller) with `auto.create.topics.enable=false`. The six contract topics are created by the
+one-shot `kafka-init` compose service (`infrastructure/kafka/create-topics.sh`, idempotent):
+`vehicle.telemetry`/`vehicle.location` 6 partitions, the rest 3, RF 1. Adding a topic means updating
+`kafkaTopics` in `packages/events/src/topics.ts`, `create-topics.sh` and `docs/contracts.md` together —
+`npm run smoke:kafka` fails on drift. Client library: `kafkajs` (see `PROGRESS.md` Decisions for the
+maintenance trade-off). No producers/consumers wired yet (step 1.2+).
 
 ## Topics (`docs/contracts.md`)
 
@@ -64,7 +66,8 @@ Add fields via `schemaVersion` bump, not silently. Defined in `packages/types` +
 
 ## Verification
 
-Once Phase 1 wires producers/consumers: the E2E smoke test (MQTT → Kafka → TimescaleDB) per `CLAUDE.md`
+Topics: `npm run smoke:kafka` (needs `docker compose up -d kafka kafka-init` and a built
+`packages/events`). Once Phase 1 wires producers/consumers: the E2E smoke test (MQTT → Kafka → TimescaleDB) per `CLAUDE.md`
 Testing table. Topic existence/config can be checked with `docker exec iiot-kafka
 /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list` (path confirmed present on the
 `apache/kafka:4.3.1` image).

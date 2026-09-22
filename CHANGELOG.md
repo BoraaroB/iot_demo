@@ -7,7 +7,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Each com
 
 ## [Unreleased]
 
+### Added
+- Kafka topics created explicitly: one-shot `kafka-init` service in `docker-compose.yml` runs `infrastructure/kafka/create-topics.sh` (idempotent, `--if-not-exists`) after the broker is healthy. `vehicle.telemetry`/`vehicle.location` get 6 partitions, the other 4 topics 3; replication factor 1 (single-node broker).
+- `npm run smoke:kafka` (`scripts/smoke-kafka.mjs`): checks that the topics on the running broker match `kafkaTopics` from `@iiot/events`. Fails on a missing contract topic or an unexpected `vehicle.*` topic.
+
 ### Changed
+- Kafka broker: `auto.create.topics.enable=false` (`KAFKA_AUTO_CREATE_TOPICS_ENABLE`). Producing to an unknown topic now fails instead of silently creating it.
 - Moved `skills/` → `.claude/skills/` (`git mv`, history preserved) so Claude Code auto-discovers the 14 project skills for every developer who clones the repo; updated path references in `CLAUDE.md` and `docs/repository-layout.md`. Historical entries below keep the old path.
 - `.gitignore`: ignore `.claude/settings.local.json` (personal Claude Code settings).
 - `skills/architecture/SKILL.md`: removed the duplicated topology diagram; it now references `CLAUDE.md` "Architecture" as the single source of truth.
