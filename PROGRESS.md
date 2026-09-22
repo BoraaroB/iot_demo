@@ -6,10 +6,10 @@
 ## Current position
 
 - **Phase:** 0 — Bootstrap
-- **Step:** 0.7 done (`npm run smoke` — boots all 7 services, checks `/health`+`/ready`+404, verifies graceful shutdown)
+- **Step:** 0.8 done (`docs/` created, `CLAUDE.md` trimmed to 89 lines)
 - **Branch:** `main`
 - **Last tag:** none
-- **Next step:** 0.8 — `docs/` (only what exists) + trim `CLAUDE.md` to ~80–90 lines
+- **Next step:** 0.9 — `skills/` (14 short, project-specific skills)
 
 Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 
@@ -23,7 +23,7 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
   - [x] 0.5 Dockerfiles (multi-stage, non-root): `deps` → `build` → `prod-deps` → `runtime`, non-root `iiot` user, `HEALTHCHECK` against `/health`. One template (`infrastructure/docker/Dockerfile.service.template`) generates all 7 (`generate-dockerfiles.sh`) since dependency sets are currently identical across services.
   - [x] 0.6 `docker-compose.yml` — Kafka (KRaft, single-node combined broker+controller), Postgres (`vehicle_db`+`alert_db`), TimescaleDB (`telemetry_db`), Redis, EMQX, Kafka UI (`kafbat` fork). All 6 with healthchecks, bind-mount persistence (`.data/`, gitignored), `.env.example`.
   - [x] 0.7 `npm run smoke` (`scripts/smoke.mjs`) — boots each service's built `dist/index.js` on its assigned port, polls until up, asserts `/health`+`/ready` return `200 {"status":"ok"}` and an unknown route returns the JSON 404 handler, then `SIGTERM`s it and confirms exit
-  - [ ] 0.8 `docs/` (only what exists) + trim `CLAUDE.md` to ~80–90 lines: move Git/API versioning, Contracts and Repository layout into `docs/` / `README.md`, keep one-line links
+  - [x] 0.8 `docs/` (only what exists) + trim `CLAUDE.md` to ~80–90 lines: moved Repository layout, Contracts, API versioning and Git & versioning sections out of `CLAUDE.md` into `docs/repository-layout.md`, `docs/contracts.md`, `docs/api-versioning.md`, `docs/git-workflow.md`, replaced with one-line links. `CLAUDE.md` 139 → 89 lines. Also fixed the pre-existing `docker-compose.yml` Prettier formatting issue (known issue from 0.6/0.7).
   - [ ] 0.9 `skills/` (14 short, project-specific skills)
   - [ ] 0.10 full verification → tag `v0.1.0`
 - [ ] **Phase 1 — Telemetry pipeline E2E** (simulator → MQTT → ingestion → Kafka → telemetry → TimescaleDB) → `v0.2.0`
@@ -49,6 +49,7 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 | 2026-09-21 | `docker build -f services/<name>/Dockerfile -t iiot/<name>:dev .` for all 7 services (PASS, ~176MB each); ran `api-gateway` and `vehicle` containers, curled `/health` + `/ready` (200 `{"status":"ok"}`), `docker exec ... whoami` → `iiot` (non-root confirmed), `docker inspect --format='{{json .State.Health}}'` → `"healthy"` after `start-period`; test images/containers removed after verification | PASS |
 | 2026-09-22 | `docker compose config` (syntax), `docker compose up -d`, `docker compose ps` — all 6 services reached `healthy`; `docker exec iiot-postgres psql ... \l` confirmed `vehicle_db`+`alert_db`; `docker exec iiot-timescaledb psql -c "SELECT extname,extversion FROM pg_extension WHERE extname='timescaledb'"` → `2.24.0`; `docker exec iiot-redis redis-cli set/get` roundtrip; `docker exec iiot-kafka kafka-topics.sh --create/--list/--delete` roundtrip; `curl http://localhost:8080/` (Kafka UI) → 200; `curl http://localhost:18083/status` (EMQX dashboard) → 200; `docker port <container>` checked for every service to confirm host bindings actually took (caught a silent Redis bind failure — see Decisions); `docker compose down` — clean teardown, `.data/` bind mounts persisted | PASS |
 | 2026-09-22 | `npm run typecheck` (rebuild `dist/`), `npm run smoke` — all 7 services booted, `/health`+`/ready` → `200 {"status":"ok"}`, unknown route → `404 {"error":"Not Found"}`; `lsof -i :3000-3006` after the run confirmed every port released (clean `SIGTERM` exit, no `SIGKILL` fallback needed); `npm run lint` and `npm run format:check` clean on `scripts/smoke.mjs` | PASS |
+| 2026-09-22 | `npx prettier --write docker-compose.yml` (fixed pre-existing known issue), `npx prettier --check .` → clean; `npm run lint`, `npm run typecheck` → clean (no `.ts` changes in this step, ran per Definition of Done) | PASS |
 
 ## Environment (verified 2026-09-21)
 
@@ -81,8 +82,9 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 - 2026-09-22: **`postgres:18-alpine` volume mount is `/var/lib/postgresql` (not `/var/lib/postgresql/data`).** Reproduced: mounting the old pre-18 path made the container fail to start with a `pg_ctlcluster`-compatibility error — Postgres 18's official image now manages a versioned subdirectory under `/var/lib/postgresql` itself. `timescale/timescaledb` ships its own (non-`docker-library`) entrypoint and is unaffected — it still uses `/var/lib/postgresql/data`.
 - 2026-09-22: **Docker healthchecks, one per infra service, all using tools confirmed present in each image (not guessed):** Kafka → `kafka-broker-api-versions.sh --bootstrap-server localhost:9092` (confirmed present in `/opt/kafka/bin`); Postgres/TimescaleDB → `pg_isready`; Redis → `redis-cli ping`; EMQX → `emqx ctl status` (confirmed `curl`+the `emqx` CLI are both present in the `debian:13-slim`-based image, per its Dockerfile); Kafka UI → `wget --spider http://localhost:8080/` (confirmed `wget`, not `curl`, is what's on its Alpine base — no assumption made about a Spring Actuator health path existing).
 - 2026-09-22: **Host ports shifted for two services to avoid this machine's pre-existing, unrelated containers:** TimescaleDB `5434` (not `5433` — collides with a running `ft-postgres` container) and Redis `6380` (not `6379` — collides with a running `ft-redis` container). Both override via `.env` (`TIMESCALEDB_PORT`, `REDIS_PORT`). Note: Docker silently left the container running without actually publishing the port on the Redis conflict (no error, unlike the TimescaleDB one) — `docker port <container>` was checked against every service after bring-up specifically because of this; don't trust `docker compose ps` health/running status alone as proof a host port is reachable.
-- 2026-09-22: **Kafka topic creation (the 6 topics in `CLAUDE.md`'s Contracts section) is deliberately deferred to Phase 1**, when the ingestion/telemetry/vehicle/alert services actually produce/consume them. `docker-compose.yml` only brings up the broker; relying on Kafka's default `auto.create.topics.enable` for the smoke checks done in this step (a throwaway `smoke.test` topic, created and deleted).
+- 2026-09-22: **Kafka topic creation (the 6 topics in `docs/contracts.md`) is deliberately deferred to Phase 1**, when the ingestion/telemetry/vehicle/alert services actually produce/consume them. `docker-compose.yml` only brings up the broker; relying on Kafka's default `auto.create.topics.enable` for the smoke checks done in this step (a throwaway `smoke.test` topic, created and deleted).
+- 2026-09-22: **`CLAUDE.md` trimmed 139 → 89 lines.** Moved Repository layout, Contracts, API versioning, Git & versioning into `docs/repository-layout.md`, `docs/contracts.md`, `docs/api-versioning.md`, `docs/git-workflow.md` (one-line links left in `CLAUDE.md`). Kept Architecture, Hard rules, Stack, Realtime & performance, Testing, Verification and Definition of done inline — these are read every session and are short enough not to need indirection. `README.md` not created yet — no user-facing entry point needed until there's something to run end-to-end (Phase 1+); revisit then.
 
 ## Known issues
 
-- `npm run format:check` flags `docker-compose.yml` (pre-existing, from step 0.6 — not touched in 0.7). Fix in step 0.8 alongside other doc/config cleanup.
+None open.

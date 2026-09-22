@@ -21,6 +21,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Each com
 - Multi-stage `Dockerfile` for all 7 services (`node:24-alpine`; `deps` → `build` (`tsc --build`) → `prod-deps` (`npm ci --omit=dev`) → `runtime`), non-root `iiot` user, `EXPOSE`/`HEALTHCHECK` hitting `/health` via Node's built-in `fetch` (no curl/wget in the image). Generated from `infrastructure/docker/Dockerfile.service.template` via `infrastructure/docker/generate-dockerfiles.sh` (7 services currently share identical dependency sets — edit the template, not the per-service copies). `.dockerignore` added at repo root.
 - `docker-compose.yml`: local infra — Kafka (`apache/kafka:4.3.1`, KRaft combined mode, single node), PostgreSQL (`postgres:18-alpine`, `vehicle_db` + `alert_db` via `infrastructure/postgres/init/01-create-databases.sh`), TimescaleDB (`timescale/timescaledb:2.24.0-pg18-oss`, `telemetry_db`, `timescaledb` extension auto-created by the image), Redis (`redis:8-alpine`), EMQX (`emqx/emqx:5.10.5`), Kafka UI (`ghcr.io/kafbat/kafka-ui:v1.5.0`, the maintained fork of the archived `provectuslabs/kafka-ui`). All 6 services have Docker healthchecks and bind-mount persistence under `.data/` (gitignored). `.env.example` added with placeholder credentials and host-port overrides.
 - `npm run smoke` (`scripts/smoke.mjs`): starts each of the 7 services' built `dist/index.js` on its assigned port, polls `/health` until it responds, asserts `/health` and `/ready` both return `200 {"status":"ok"}` and an unknown route returns the JSON `404` handler, then sends `SIGTERM` and confirms the process exits (falls back to `SIGKILL` after 3s). No Kafka/MQTT/DB involved — those aren't wired into any service yet.
+- `docs/repository-layout.md`, `docs/contracts.md`, `docs/api-versioning.md`, `docs/git-workflow.md`: moved out of `CLAUDE.md` (139 → 89 lines), which now links to them one line each.
+
+### Fixed
+- `docker-compose.yml` Prettier formatting (long `healthcheck.test` array was unwrapped).
 
 ### Notes
 - TypeScript pinned to `^6.0.3` (not `7.0.2`) — `typescript-eslint@8.70.0` doesn't yet support TS 7's peer range.

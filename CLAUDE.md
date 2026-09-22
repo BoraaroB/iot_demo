@@ -49,62 +49,12 @@ Avoid premature complexity: no Kubernetes, service mesh, event sourcing, CQRS, s
 - Package manager: **npm workspaces** (npm 11 installed; pnpm is not).
 - Verify every dependency version from package metadata before adding it.
 
-## Repository layout (target — create incrementally)
+## Repository layout, contracts, versioning
 
-```text
-apps/web/                         Next.js dashboard
-services/{api-gateway,iot-ingestion,telemetry,vehicle,alert,realtime,simulator}/
-packages/{config,logger,events,types,validation}/
-infrastructure/{kafka,postgres,timescaledb,redis,emqx}/
-docs/   skills/   docker-compose.yml   .env.example
-```
-
-Each service: `package.json`, `tsconfig`, `src/`, Dockerfile (multi-stage, non-root, healthcheck), env config, `/health` (process only), `/ready` (dependencies), structured logging, error handling, smoke test.
-Services never import another service's source. Communicate via HTTP, Kafka or MQTT. Shared code lives in `packages/`.
-
-Each `tsconfig.json` extends root `tsconfig.base.json` and sets `"composite": true`; register it in root `tsconfig.json`'s `references`. Root `npm run typecheck` runs `tsc --build`.
-
-## Contracts
-
-MQTT topics:
-```text
-factory/{factoryId}/vehicle/{vehicleId}/telemetry
-factory/{factoryId}/vehicle/{vehicleId}/status
-factory/{factoryId}/vehicle/{vehicleId}/command
-```
-
-Kafka topics: `vehicle.telemetry`, `vehicle.location`, `vehicle.status`, `vehicle.alert`, `vehicle.mission`, `vehicle.command`. Key = `vehicleId`.
-
-Event envelope (do not add fields casually; version changes via `schemaVersion`):
-```ts
-interface EventEnvelope<TPayload> {
-  eventId: string; eventType: string; timestamp: string;
-  vehicleId: string; factoryId: string; schemaVersion: number; payload: TPayload;
-}
-```
-
-Consumers must tolerate duplicates, delays and cross-partition reordering (idempotency via `eventId`).
-
-Coordinates: local factory `x`/`y` (no GPS initially).
-
-Multi-tenancy: `organizationId` + `factoryId` on core entities. Tenant isolation is a security requirement.
-
-## API versioning
-
-- Public API is versioned by URI **in the api-gateway only**: `/api/v1/...`. Internal services use unversioned routes.
-- Major version only in the URL. Additive, backward-compatible changes stay in `v1`. `v2` only for breaking changes.
-- During a migration `v1` and `v2` run in parallel. `v1` responses get `Deprecation` and `Sunset` headers before removal.
-- Events are versioned with `schemaVersion`; WebSocket messages carry a protocol version.
-
-## Git & versioning
-
-- Conventional Commits: `feat(scope): ...`, `fix(scope): ...`, `docs: ...`, `chore: ...`, `test: ...`.
-- `main` is always verified. Work per phase on `phase/<n>-<name>`, merge when verification passes.
-- Completed phase gets an annotated SemVer tag: `git tag -a v0.N.0 -m "Phase ..."`. Fixes bump patch.
-- Roll back: inspect `git checkout vX.Y.Z`; branch from it `git switch -c fix/... vX.Y.Z`; undo on main with `git revert`.
-- Docker images tagged with the same version as git.
-- DB migrations are versioned and forward-only; provide `down` where reasonable.
-- Pushing to a remote only when the user asks.
+- Repository layout (target tree, per-service requirements, boundaries): `docs/repository-layout.md`.
+- MQTT/Kafka topics, event envelope, coordinates, multi-tenancy: `docs/contracts.md`.
+- API versioning (`/api/v1`, deprecation, schema versions): `docs/api-versioning.md`.
+- Git workflow (commits, branches, tags, rollback): `docs/git-workflow.md`.
 
 ## Realtime & performance
 
