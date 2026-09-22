@@ -29,6 +29,9 @@ services:
       KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
       KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      # Topics are created explicitly by `kafka-init` so partition counts are deliberate
+      # and a misspelled topic name fails loudly instead of silently creating a new topic.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
     volumes:
       - ./.data/kafka:/tmp/kraft-combined-logs
     healthcheck:
@@ -43,6 +46,22 @@ services:
       timeout: 10s
       retries: 10
       start_period: 20s
+    networks:
+      - iiot-network
+
+  # One-shot: creates the platform topics once the broker is healthy, then exits 0.
+  kafka-init:
+    image: apache/kafka:4.3.1
+    container_name: iiot-kafka-init
+    restart: 'no'
+    entrypoint: ['/bin/bash', '/scripts/create-topics.sh']
+    environment:
+      KAFKA_BOOTSTRAP_SERVER: kafka:19092
+    volumes:
+      - ./infrastructure/kafka/create-topics.sh:/scripts/create-topics.sh:ro
+    depends_on:
+      kafka:
+        condition: service_healthy
     networks:
       - iiot-network
 

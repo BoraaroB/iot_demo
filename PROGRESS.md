@@ -5,11 +5,11 @@
 
 ## Current position
 
-- **Phase:** 0 — Bootstrap (complete)
-- **Step:** 0.10 done (full verification, tagged)
-- **Branch:** `main`
+- **Phase:** 1 — Telemetry pipeline E2E
+- **Step:** 1.1 done (Kafka topics created explicitly)
+- **Branch:** `feat/1.1-kafka-topics`
 - **Last tag:** `v0.1.0`
-- **Next step:** Phase 1 — Telemetry pipeline E2E (simulator → MQTT → ingestion → Kafka → telemetry → TimescaleDB)
+- **Next step:** 1.2 — `iot-ingestion` MQTT → Kafka bridge
 
 Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 
@@ -26,7 +26,13 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
   - [x] 0.8 `docs/` (only what exists) + trim `CLAUDE.md` to ~80–90 lines: moved Repository layout, Contracts, API versioning and Git & versioning sections out of `CLAUDE.md` into `docs/repository-layout.md`, `docs/contracts.md`, `docs/api-versioning.md`, `docs/git-workflow.md`, replaced with one-line links. `CLAUDE.md` 139 → 89 lines. Also fixed the pre-existing `docker-compose.yml` Prettier formatting issue (known issue from 0.6/0.7).
   - [x] 0.9 `skills/` (14 short, project-specific skills): `architecture`, `backend`, `frontend`, `kafka`, `mqtt`, `websocket`, `database`, `docker`, `simulator`, `testing`, `observability`, `security`, `load-testing`, `deployment`. Each `skills/<domain>/SKILL.md` covers purpose, current implementation status (most domains are Phase-1+ scope, not started yet — skills say so explicitly rather than describing unbuilt code as if it exists), conventions, rules, anti-patterns, and verification steps, cross-linked to each other and to `docs/*.md`/`CLAUDE.md` rather than duplicating their content.
   - [x] 0.10 full verification → tagged `v0.1.0`
-- [ ] **Phase 1 — Telemetry pipeline E2E** (simulator → MQTT → ingestion → Kafka → telemetry → TimescaleDB) → `v0.2.0`
+- [~] **Phase 1 — Telemetry pipeline E2E** (simulator → MQTT → ingestion → Kafka → telemetry → TimescaleDB) → `v0.2.0`
+  - [x] 1.1 Kafka topics created explicitly: `kafka-init` one-shot compose service (`infrastructure/kafka/create-topics.sh`, idempotent), broker auto-create disabled, `npm run smoke:kafka` checks broker topics against `@iiot/events` `kafkaTopics`
+  - [ ] 1.2 `iot-ingestion`: MQTT subscribe (wildcard) → Zod payload validation → `EventEnvelope` → Kafka producer (key = `vehicleId`); `/ready` checks MQTT + Kafka for real
+  - [ ] 1.3 `telemetry`: `node-pg-migrate` migration (telemetry hypertable) + Kafka consumer → TimescaleDB, idempotent on `eventId`; `/ready` checks Kafka + DB
+  - [ ] 1.4 `simulator`: basic telemetry publisher over MQTT (vehicle count + publish rate from env)
+  - [ ] 1.5 E2E smoke test MQTT → Kafka → TimescaleDB (`npm run smoke:e2e`)
+  - [ ] 1.6 full verification → tag `v0.2.0`
 - [ ] **Phase 2 — Realtime + first dashboard** (WebSocket, Next.js live map) → `v0.3.0`
 - [ ] **Phase 3 — Domain model, Vehicle service, API Gateway `/api/v1`** → `v0.4.0`
 - [ ] **Phase 4 — Alerts** → `v0.5.0`
@@ -53,6 +59,7 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 | 2026-09-22 | `npx prettier --check skills/` → clean (all 14 `skills/<domain>/SKILL.md` files); manual review of each file against required sections (purpose, responsibilities, rules, conventions, anti-patterns, verification, relevant commands, architecture constraints) per `instruction_plan.md` §29; no `.ts` changes, `npm run lint`/`npm run typecheck` not re-run (no code touched) | PASS |
 | 2026-09-22 | Step 0.10 full verification against `instruction_plan.md` §32 acceptance criteria: `npm run typecheck`, `npm run lint`, `npm run format:check` (all clean); `npm run smoke` (7/7 services `/health`+`/ready`+404, ports released after); `docker build` for all 7 services (all succeeded, throwaway `:v0.1.0-verify` tags removed after); `docker compose config` + `docker compose up -d` (all 6 infra services reached `healthy`, `docker port` confirmed every host port actually bound), `docker compose down` (clean teardown); `git ls-files \| grep env` → only `.env.example` tracked, `.gitignore` excludes `.env*` | PASS |
 | 2026-09-22 | Moved `skills/` → `.claude/skills/`: `git status` shows 14 renames (R); Claude Code session listed all 14 skills (`architecture` … `websocket`) as available immediately after the move (auto-discovery confirmed); `grep -rn "skills/"` → only historical CHANGELOG/PROGRESS entries and `instruction_plan.md` (original spec, left unchanged) still use the old path; `npx prettier --check .` | PASS |
+| 2026-09-22 | Step 1.1: `docker compose config -q`; `docker compose up -d kafka kafka-init` → 6 topics created, `iiot-kafka-init` exit 0; re-ran `docker compose up kafka-init` → exit 0, no duplicates (idempotent); `kafka-configs.sh --describe --all` → `auto.create.topics.enable=false` (`STATIC_BROKER_CONFIG`); `kafka-console-producer.sh --topic no.such.topic` → `UNKNOWN_TOPIC_OR_PARTITION`, topic not created; `npm run smoke:kafka` → 6/6 PASS (exit 0); negative check: created stray `vehicle.telemtry` → `smoke:kafka` exit 1 naming it, deleted it → exit 0 again; `npm run typecheck`, `npm run lint`, `npx prettier --check .` clean | PASS |
 
 ## Environment (verified 2026-09-21)
 
@@ -87,6 +94,9 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 - 2026-09-22: **Host ports shifted for two services to avoid this machine's pre-existing, unrelated containers:** TimescaleDB `5434` (not `5433` — collides with a running `ft-postgres` container) and Redis `6380` (not `6379` — collides with a running `ft-redis` container). Both override via `.env` (`TIMESCALEDB_PORT`, `REDIS_PORT`). Note: Docker silently left the container running without actually publishing the port on the Redis conflict (no error, unlike the TimescaleDB one) — `docker port <container>` was checked against every service after bring-up specifically because of this; don't trust `docker compose ps` health/running status alone as proof a host port is reachable.
 - 2026-09-22: **Kafka topic creation (the 6 topics in `docs/contracts.md`) is deliberately deferred to Phase 1**, when the ingestion/telemetry/vehicle/alert services actually produce/consume them. `docker-compose.yml` only brings up the broker; relying on Kafka's default `auto.create.topics.enable` for the smoke checks done in this step (a throwaway `smoke.test` topic, created and deleted).
 - 2026-09-22: **`CLAUDE.md` trimmed 139 → 89 lines.** Moved Repository layout, Contracts, API versioning, Git & versioning into `docs/repository-layout.md`, `docs/contracts.md`, `docs/api-versioning.md`, `docs/git-workflow.md` (one-line links left in `CLAUDE.md`). Kept Architecture, Hard rules, Stack, Realtime & performance, Testing, Verification and Definition of done inline — these are read every session and are short enough not to need indirection. `README.md` not created yet — no user-facing entry point needed until there's something to run end-to-end (Phase 1+); revisit then.
+- 2026-09-22: **Kafka client: `kafkajs@2.2.4`** (user choice). Known trade-off, recorded on purpose: its last release was 2023-02-27 (`npm view kafkajs time.modified`) and it is no longer actively maintained. Alternatives checked the same day: `@platformatic/kafka@2.11.0` (pure JS, maintained) and `@confluentinc/kafka-javascript@1.10.1` (librdkafka, native). Revisit if kafkajs breaks against Kafka 4.x or Node 24.
+- 2026-09-22: **DB migrations: `node-pg-migrate`** (9.0.0 at time of choice, SQL migrations, not an ORM). First used in step 1.3 for the TimescaleDB telemetry hypertable.
+- 2026-09-22: **Kafka topics created explicitly, auto-create off.** One-shot `kafka-init` compose service (same `apache/kafka:4.3.1` image, so `kafka-topics.sh` is guaranteed present) instead of a host script, so a plain `docker compose up` gives a usable broker with no host tooling. Partitions: `vehicle.telemetry`/`vehicle.location` 6, others 3 (partition count caps consumer parallelism per group; can be increased later, never decreased). RF 1 (single node). Retention left at broker default (7 days) until telemetry volume is measured. Topic list is duplicated in `create-topics.sh` (bash can't import TS); `npm run smoke:kafka` catches drift against `@iiot/events`.
 
 ## Known issues
 
