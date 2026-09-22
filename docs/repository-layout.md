@@ -28,3 +28,8 @@ Root `npm run typecheck` runs `tsc --build` across all registered project refere
 ## Service boundaries
 
 Services never import another service's source. Communicate via HTTP, Kafka or MQTT only. Shared code lives in `packages/`.
+
+## Planned refactors (implement when CRUD routes are added)
+
+- **Shared error handling**: every service's `app.ts` currently duplicates the same `notFoundHandler`/`errorHandler` pair. Extract into a shared package (e.g. `packages/http` or an addition to `packages/logger`) exporting a `notFoundHandler` and an `errorHandler(logger)` factory; each service imports and mounts them instead of redefining.
+- **Per-domain routers**: once a service gets real business endpoints (not just `/health`/`/ready`), move them out of `app.ts` into `src/routes/<domain>.ts` using `express.Router()`. `app.ts` stays an orchestrator that only mounts middleware and `app.use('/api/v1/<domain>', <domain>Router)`. Keep `/health` and `/ready` inline in `app.ts` (infrastructure, not business routes).
