@@ -5,3 +5,12 @@ export {
   parseEventEnvelope,
   type CreateEventEnvelopeInput,
 } from './envelope.js';
+export {
+  telemetryPayloadSchema,
+  statusPayloadSchema,
+  vehicleStatuses,
+  eventTypes,
+  PAYLOAD_SCHEMA_VERSION,
+  type TelemetryPayload,
+  type StatusPayload,
+} from './payloads.js';

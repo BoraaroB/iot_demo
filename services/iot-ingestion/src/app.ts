@@ -7,13 +7,15 @@ import express, {
 import { pinoHttp } from 'pino-http';
 import type { Logger } from '@iiot/logger';
 
+/** Named dependency checks; every one must be `true` for `/ready` to pass. */
+export type ReadinessChecks = () => Record<string, boolean>;
+
 /**
  * `/health` only checks that the process itself is alive — no dependency
- * calls, per CLAUDE.md. `/ready` will check this service's actual
- * dependencies (Kafka, databases, MQTT, ...) once they are wired up; until
- * then it mirrors `/health`.
+ * calls, per CLAUDE.md. `/ready` reports the MQTT + Kafka connection state
+ * (cheap in-memory flags, no network round-trip per probe).
  */
-export function createApp(logger: Logger): Express {
+export function createApp(logger: Logger, readiness: ReadinessChecks): Express {
   const app = express();
 
   app.use(pinoHttp({ logger }));
@@ -23,7 +25,9 @@ export function createApp(logger: Logger): Express {
   });
 
   app.get('/ready', (_req: Request, res: Response) => {
-    res.status(200).json({ status: 'ok' });
+    const checks = readiness();
+    const ready = Object.values(checks).every(Boolean);
+    res.status(ready ? 200 : 503).json({ status: ready ? 'ok' : 'unavailable', checks });
   });
 
   app.use((_req: Request, res: Response) => {

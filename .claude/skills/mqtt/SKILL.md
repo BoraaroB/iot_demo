@@ -11,11 +11,17 @@ MQTT is the only protocol vehicles/the simulator speak to the platform. `iot-ing
 service allowed to hold an MQTT connection — it bridges to Kafka and does nothing else (see
 [[architecture]]).
 
-## Current state (as of Phase 0)
+## Current state (as of step 1.2)
 
 EMQX (`emqx/emqx:5.10.5`) is up in `docker-compose.yml`, dashboard on `EMQX_DASHBOARD_PORT` (18083), MQTT
 on `EMQX_MQTT_PORT` (1883). `allow_anonymous` is on the default (no auth configured) — local dev only,
-revisit in Phase 7 (auth/RBAC/multi-tenancy). No publishers/subscribers wired yet; that starts in Phase 1.
+revisit in Phase 7 (auth/RBAC/multi-tenancy).
+
+`iot-ingestion` (client: `mqtt@5`) subscribes QoS 1 to `factory/+/vehicle/+/telemetry` and `.../status`
+via an EMQX **shared subscription** (`$share/<MQTT_SHARED_GROUP>/...`), so replicas split the stream. It
+connects to MQTT only after the Kafka producer is up. Env: `MQTT_URL` (default `mqtt://localhost:1883`,
+in-compose `mqtt://emqx:1883`), `MQTT_CLIENT_ID` (generated if unset, must be unique per replica),
+`MQTT_SHARED_GROUP` (default `iot-ingestion`). Payload schemas: `docs/contracts.md` "Payloads".
 
 ## Topics (`docs/contracts.md`)
 
@@ -52,8 +58,9 @@ factory/{factoryId}/vehicle/{vehicleId}/command
 
 ## Verification
 
-Once Phase 1 wires the bridge: the E2E smoke test (MQTT → Kafka → TimescaleDB) per `CLAUDE.md`. Manual
-check: `docker exec iiot-emqx emqx ctl status`, publish via `mosquitto_pub` or the simulator, confirm
+`npm run smoke:ingestion` (needs `docker compose up -d kafka kafka-init emqx`) — real MQTT → Kafka, checks
+invalid payloads are dropped and valid ones arrive as envelopes keyed by `vehicleId`. E2E to TimescaleDB
+comes in step 1.5. Manual check: `docker exec iiot-emqx emqx ctl status`, publish via `mosquitto_pub` or the simulator, confirm
 `iot-ingestion` logs (Pino) show the received + forwarded event.
 
 ## Related
