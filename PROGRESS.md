@@ -6,10 +6,10 @@
 ## Current position
 
 - **Phase:** 0 — Bootstrap
-- **Step:** 0.5 done (multi-stage, non-root Dockerfiles for all 7 services)
+- **Step:** 0.6 done (`docker-compose.yml` — Kafka KRaft, Postgres, TimescaleDB, Redis, EMQX, Kafka UI)
 - **Branch:** `main`
 - **Last tag:** none
-- **Next step:** 0.6 — `docker-compose.yml` (Kafka KRaft, Postgres, TimescaleDB, Redis, EMQX, Kafka UI)
+- **Next step:** 0.7 — `npm run smoke` (health/ready of all services)
 
 Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 
@@ -21,7 +21,7 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
   - [x] 0.3 `packages/` — types (EventEnvelope + id aliases), events (topics + envelope create/parse via Zod), logger (Pino wrapper), config (env loader via Zod). Root `tsconfig.json` (project references) + `typecheck` script added.
   - [x] 0.4 service skeletons (7): `api-gateway`(3000), `iot-ingestion`(3001), `telemetry`(3002), `vehicle`(3003), `alert`(3004), `realtime`(3005), `simulator`(3006). Each: Express app, `/health` (process only), `/ready` (mirrors `/health` for now — no dependencies wired yet), `pino-http` request logging via `@iiot/logger`, JSON error handler + 404, Zod env schema (`@iiot/config`'s `baseEnvSchema` + `PORT`), graceful shutdown on `SIGTERM`/`SIGINT`. All depend on `@iiot/{types,events,logger,config}`; only `logger`+`config` are imported so far (`types`/`events` wired in when Kafka/MQTT land in Phase 1).
   - [x] 0.5 Dockerfiles (multi-stage, non-root): `deps` → `build` → `prod-deps` → `runtime`, non-root `iiot` user, `HEALTHCHECK` against `/health`. One template (`infrastructure/docker/Dockerfile.service.template`) generates all 7 (`generate-dockerfiles.sh`) since dependency sets are currently identical across services.
-  - [ ] 0.6 `docker-compose.yml` — Kafka (KRaft), Postgres, TimescaleDB, Redis, EMQX, Kafka UI
+  - [x] 0.6 `docker-compose.yml` — Kafka (KRaft, single-node combined broker+controller), Postgres (`vehicle_db`+`alert_db`), TimescaleDB (`telemetry_db`), Redis, EMQX, Kafka UI (`kafbat` fork). All 6 with healthchecks, bind-mount persistence (`.data/`, gitignored), `.env.example`.
   - [ ] 0.7 `npm run smoke` (health/ready of all services)
   - [ ] 0.8 `docs/` (only what exists) + trim `CLAUDE.md` to ~80–90 lines: move Git/API versioning, Contracts and Repository layout into `docs/` / `README.md`, keep one-line links
   - [ ] 0.9 `skills/` (14 short, project-specific skills)
@@ -47,6 +47,7 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 | 2026-09-21 | `npm run typecheck`, `npm run lint`, `npm run format:check`, runtime check via `tsx` (logger/config/events exercised end-to-end) | PASS |
 | 2026-09-21 | `npm run typecheck`, `npm run lint`, `npm run format:check` (all 7 services); runtime: built + ran `api-gateway` and `iot-ingestion`, curled `/health`, `/ready`, an unknown route (404 JSON), verified `pino-http` request logs, then sent `SIGTERM` and confirmed graceful shutdown log + connection refused after | PASS |
 | 2026-09-21 | `docker build -f services/<name>/Dockerfile -t iiot/<name>:dev .` for all 7 services (PASS, ~176MB each); ran `api-gateway` and `vehicle` containers, curled `/health` + `/ready` (200 `{"status":"ok"}`), `docker exec ... whoami` → `iiot` (non-root confirmed), `docker inspect --format='{{json .State.Health}}'` → `"healthy"` after `start-period`; test images/containers removed after verification | PASS |
+| 2026-09-22 | `docker compose config` (syntax), `docker compose up -d`, `docker compose ps` — all 6 services reached `healthy`; `docker exec iiot-postgres psql ... \l` confirmed `vehicle_db`+`alert_db`; `docker exec iiot-timescaledb psql -c "SELECT extname,extversion FROM pg_extension WHERE extname='timescaledb'"` → `2.24.0`; `docker exec iiot-redis redis-cli set/get` roundtrip; `docker exec iiot-kafka kafka-topics.sh --create/--list/--delete` roundtrip; `curl http://localhost:8080/` (Kafka UI) → 200; `curl http://localhost:18083/status` (EMQX dashboard) → 200; `docker port <container>` checked for every service to confirm host bindings actually took (caught a silent Redis bind failure — see Decisions); `docker compose down` — clean teardown, `.data/` bind mounts persisted | PASS |
 
 ## Environment (verified 2026-09-21)
 
@@ -69,6 +70,17 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 - 2026-09-21: **npm workspaces + Docker multi-stage gotcha (solved):** `node_modules/@iiot/<pkg>` are symlinks to `../../packages/<pkg>` (confirmed via `ls -la`), so the runtime stage must carry both the pruned `node_modules` (from a `prod-deps` stage running `npm ci --omit=dev`) *and* each `packages/<pkg>/package.json` + `dist/` at their real paths — copying `node_modules` alone breaks the symlink targets.
 - 2026-09-21: **`generate-dockerfiles.sh` avoids `declare -A`** — macOS ships bash 3.2 (`/bin/bash`, confirmed via `bash --version`; no newer bash on `PATH`), which predates associative arrays and silently mis-evaluates `[api-gateway]` as arithmetic (`api - gateway`) instead of a literal string key. Uses a plain `name:port` newline list instead.
 - 2026-09-21: **zod v4 API used correctly** — `z.uuid()` / `z.iso.datetime()` (top-level functions), not the deprecated `z.string().uuid()` / `.datetime()` chained methods. Verified against the installed package's `.d.ts`, not assumed from training data.
+- 2026-09-22: **Image choices for `docker-compose.yml`, each verified via `docker manifest inspect` (tag exists) before use, per the no-hallucinated-versions rule:**
+  - Kafka: `apache/kafka:4.3.1` — official image, KRaft mode (no ZooKeeper). Single-node combined `broker,controller` config copied verbatim from the official example at `apache/kafka` repo (`docker/examples/docker-compose-files/single-node/plaintext/docker-compose.yml`), including its fixed dev `CLUSTER_ID` — renamed `broker`→`kafka` to match this project's hostname/topic conventions.
+  - Postgres (`vehicle_db`, `alert_db`): `postgres:18-alpine`. Two databases in one instance (not two containers) — simplest option for demo scale; `alert_db` created by `infrastructure/postgres/init/01-create-databases.sh` (`POSTGRES_DB` only creates one default database).
+  - TimescaleDB (`telemetry_db`): `timescale/timescaledb:2.24.0-pg18-oss` (OSS license tag — no Enterprise-only features needed). The image auto-runs `CREATE EXTENSION IF NOT EXISTS timescaledb` against `POSTGRES_DB` on init (confirmed via its `docker-entrypoint-initdb.d` scripts in `timescale/timescaledb-docker`), so no custom init script was needed; extension presence verified live (`2.24.0`).
+  - Redis: `redis:8-alpine`. No auth configured yet (local dev only) — revisit when Phase 7 (auth/RBAC/multi-tenancy) lands.
+  - EMQX: `emqx/emqx:5.10.5` (the `emqx/emqx` repo, not the deprecated `library/emqx` one). No MQTT auth configured yet (`allow_anonymous` default) — same Phase 7 revisit.
+  - Kafka UI: `ghcr.io/kafbat/kafka-ui:v1.5.0` — `provectuslabs/kafka-ui` is unmaintained (~2 years, per its Docker Hub page); `kafbat/kafka-ui` is the actively maintained community fork. Config via `KAFKA_CLUSTERS_0_NAME` / `KAFKA_CLUSTERS_0_BOOTSTRAP-SERVERS` env vars (hyphen preserved in the var name per kafbat's own docs — verified via `ui.docs.kafbat.io`, not assumed).
+- 2026-09-22: **`postgres:18-alpine` volume mount is `/var/lib/postgresql` (not `/var/lib/postgresql/data`).** Reproduced: mounting the old pre-18 path made the container fail to start with a `pg_ctlcluster`-compatibility error — Postgres 18's official image now manages a versioned subdirectory under `/var/lib/postgresql` itself. `timescale/timescaledb` ships its own (non-`docker-library`) entrypoint and is unaffected — it still uses `/var/lib/postgresql/data`.
+- 2026-09-22: **Docker healthchecks, one per infra service, all using tools confirmed present in each image (not guessed):** Kafka → `kafka-broker-api-versions.sh --bootstrap-server localhost:9092` (confirmed present in `/opt/kafka/bin`); Postgres/TimescaleDB → `pg_isready`; Redis → `redis-cli ping`; EMQX → `emqx ctl status` (confirmed `curl`+the `emqx` CLI are both present in the `debian:13-slim`-based image, per its Dockerfile); Kafka UI → `wget --spider http://localhost:8080/` (confirmed `wget`, not `curl`, is what's on its Alpine base — no assumption made about a Spring Actuator health path existing).
+- 2026-09-22: **Host ports shifted for two services to avoid this machine's pre-existing, unrelated containers:** TimescaleDB `5434` (not `5433` — collides with a running `ft-postgres` container) and Redis `6380` (not `6379` — collides with a running `ft-redis` container). Both override via `.env` (`TIMESCALEDB_PORT`, `REDIS_PORT`). Note: Docker silently left the container running without actually publishing the port on the Redis conflict (no error, unlike the TimescaleDB one) — `docker port <container>` was checked against every service after bring-up specifically because of this; don't trust `docker compose ps` health/running status alone as proof a host port is reachable.
+- 2026-09-22: **Kafka topic creation (the 6 topics in `CLAUDE.md`'s Contracts section) is deliberately deferred to Phase 1**, when the ingestion/telemetry/vehicle/alert services actually produce/consume them. `docker-compose.yml` only brings up the broker; relying on Kafka's default `auto.create.topics.enable` for the smoke checks done in this step (a throwaway `smoke.test` topic, created and deleted).
 
 ## Known issues
 
