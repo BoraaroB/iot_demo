@@ -7,6 +7,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Each com
 
 ## [Unreleased]
 
+### Changed
+- `skills/architecture/SKILL.md`: removed the duplicated topology diagram; it now references `CLAUDE.md` "Architecture" as the single source of truth.
+
 ## [0.1.0] - 2026-09-22
 
 ### Added
