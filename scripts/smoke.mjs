@@ -21,7 +21,12 @@ const SERVICES = [
     env: { MQTT_URL: 'mqtt://127.0.0.1:1', KAFKA_BROKERS: '127.0.0.1:1' },
     ready: { status: 503, body: { status: 'unavailable', checks: { mqtt: false, kafka: false } } },
   },
-  { name: 'telemetry', port: 3002 },
+  {
+    name: 'telemetry',
+    port: 3002,
+    env: { DATABASE_URL: 'postgres://smoke@127.0.0.1:1/none', KAFKA_BROKERS: '127.0.0.1:1' },
+    ready: { status: 503, body: { status: 'unavailable', checks: { db: false, kafka: false } } },
+  },
   { name: 'vehicle', port: 3003 },
   { name: 'alert', port: 3004 },
   { name: 'realtime', port: 3005 },

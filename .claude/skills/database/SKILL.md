@@ -21,11 +21,23 @@ services (see [[architecture]]).
   containers) — simplest option at demo scale; `alert_db` is created by
   `infrastructure/postgres/init/01-create-databases.sh` since `POSTGRES_DB` only creates one DB by default.
 
-## Current state (as of Phase 0)
+## Current state (as of step 1.3)
 
-Compose brings up all three datastores with healthchecks; no schema/migrations exist yet — that starts in
-Phase 1 (telemetry table) and Phase 3 (vehicle domain model). No ORM/migration tool has been chosen yet —
-decide and record it in `PROGRESS.md` Decisions when the first migration is written, don't assume one.
+Compose brings up all three datastores with healthchecks. Migration tool: `node-pg-migrate` (runner API,
+not an ORM). Only `telemetry_db` has a schema so far; `vehicle_db`/`alert_db` start in Phase 3/4.
+
+`telemetry` (`services/telemetry/src/`):
+
+- Migrations are TS files in `src/migrations/<ms-timestamp>_<name>.ts` that call `pgm.sql(...)` with raw
+  SQL. tsc compiles them to `dist/migrations/`, so the generated Dockerfile ships them with no template
+  change. `migrate.ts` runs them at startup (`advisoryLockMode: 'wait'` for concurrent replicas,
+  single transaction, `pgmigrations` table) and ignores the `.d.ts`/`.map` files tsc emits next to them.
+- `telemetry` hypertable, partitioned on device time (`payload.timestamp`). Idempotency on `eventId` is
+  `UNIQUE (event_id, time)`, because hypertable unique indexes must include the partitioning column.
+  Inserts are one `INSERT ... SELECT * FROM unnest($1::timestamptz[], ...) ON CONFLICT DO NOTHING` per
+  chunk. `create_hypertable` also adds its default `telemetry_time_idx`.
+- Env: `DATABASE_URL` (required, no default because it holds credentials; never logged), `DB_POOL_MAX`.
+  Host: `postgres://iiot:<pw>@localhost:5434/telemetry_db`; inside compose: `timescaledb:5432`.
 
 ## Images & ports (verified via `docker manifest inspect` before use — see `PROGRESS.md` Decisions)
 
@@ -63,8 +75,9 @@ Postgres `postgres:18-alpine` (`POSTGRES_PORT`, default 5432), TimescaleDB
 
 ## Verification
 
-DB schema changes: migration + the matching DB smoke test (per `CLAUDE.md` Verification table — smoke test
-scripts don't exist per-DB yet, add one alongside the first migration). Container health:
+DB schema changes: migration + the matching DB smoke test (per `CLAUDE.md` Verification table).
+`telemetry_db`: `npm run smoke:telemetry` (checks the hypertable, the `pgmigrations` record and the
+inserted rows). Inspect with `docker exec iiot-timescaledb psql -U iiot -d telemetry_db -c '\d telemetry'`. Container health:
 `docker compose ps`, `docker exec <container> pg_isready` / `redis-cli ping`.
 
 ## Related

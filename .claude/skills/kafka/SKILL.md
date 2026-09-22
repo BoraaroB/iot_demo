@@ -11,7 +11,7 @@ Kafka is the backbone between ingestion and the three domain consumers (`telemet
 plus `realtime`. Getting topic/partition/idempotency conventions right early avoids a schema-registry-style
 retrofit later (which `CLAUDE.md` explicitly says to avoid).
 
-## Current state (as of step 1.2)
+## Current state (as of step 1.3)
 
 Broker is up in `docker-compose.yml` (`apache/kafka:4.3.1`, KRaft mode, single-node combined
 broker+controller) with `auto.create.topics.enable=false`. The six contract topics are created by the
@@ -25,12 +25,23 @@ First producer: `iot-ingestion` (`services/iot-ingestion/src/kafka.ts`) — `ack
 `Partitioners.DefaultPartitioner` (murmur2, Java-compatible), `allowAutoTopicCreation: false`, key =
 `vehicleId`, in-flight sends capped by `INGEST_MAX_IN_FLIGHT` (excess dropped, not buffered). Env:
 `KAFKA_BROKERS` (host `localhost:9092`; inside compose **must** be `kafka:19092` — the host listener
-advertises `localhost`, which fails from a container), `KAFKA_CLIENT_ID`. No consumers yet (step 1.3).
+advertises `localhost`, which fails from a container), `KAFKA_CLIENT_ID`.
+
+First consumer: `telemetry` (`services/telemetry/src/kafka.ts` + `persist.ts`) — group `KAFKA_GROUP_ID`
+(default `telemetry`), `vehicle.telemetry`, `fromBeginning: true` for a new group, `eachBatch` with
+`eachBatchAutoResolve: false`: the handler resolves the last offset of each chunk only after its insert
+succeeds (auto-resolve would resolve `batch.lastOffset()` even on an early return — verified in
+`kafkajs/src/consumer/runner.js`). Invalid messages are logged (Zod issues, no stack) and skipped. A
+failing insert throws; kafkajs retries, then crashes with `KafkaJSNumberOfRetriesExceeded` and restarts
+the consumer (reproduced by stopping TimescaleDB). Readiness = group joined (`GROUP_JOIN`/`CRASH`/`STOP`
+events) + the same admin probe as ingestion.
 
 kafkajs gotchas (verified): the producer `DISCONNECT` event fires only on explicit `disconnect()`, not on
 broker loss — readiness uses a periodic `admin.describeCluster()` probe instead. On Node 24, kafkajs emits
 a harmless `TimeoutNegativeWarning` from `RequestQueue.scheduleCheckPendingRequests` (negative delay
-clamped to 1 ms).
+clamped to 1 ms). `consumer.disconnect()` waits for the in-flight fetch (a few seconds in steady state)
+and, during a rebalance with a dead member still in the group, for the whole rebalance — shutdown then
+hits the 10s hard timeout (reproduced).
 
 ## Topics (`docs/contracts.md`)
 
@@ -78,7 +89,7 @@ Add fields via `schemaVersion` bump, not silently. Defined in `packages/types` +
 ## Verification
 
 Topics: `npm run smoke:kafka` (needs `docker compose up -d kafka kafka-init` and a built
-`packages/events`). Once Phase 1 wires producers/consumers: the E2E smoke test (MQTT → Kafka → TimescaleDB) per `CLAUDE.md`
+`packages/events`). Consumer → DB: `npm run smoke:telemetry` (needs `kafka kafka-init timescaledb`). Once Phase 1 wires producers/consumers: the E2E smoke test (MQTT → Kafka → TimescaleDB) per `CLAUDE.md`
 Testing table. Topic existence/config can be checked with `docker exec iiot-kafka
 /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list` (path confirmed present on the
 `apache/kafka:4.3.1` image).
