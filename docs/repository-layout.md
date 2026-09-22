@@ -7,7 +7,7 @@ apps/web/                         Next.js dashboard
 services/{api-gateway,iot-ingestion,telemetry,vehicle,alert,realtime,simulator}/
 packages/{config,logger,events,types,validation}/
 infrastructure/{kafka,postgres,timescaledb,redis,emqx}/
-docs/   skills/   docker-compose.yml   .env.example
+docs/   .claude/skills/   docker-compose.yml   .env.example
 ```
 
 ## Per-service requirements

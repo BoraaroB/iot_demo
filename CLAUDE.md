@@ -14,16 +14,16 @@ Full original specification: `instruction_plan.md` (read only the section you ne
 ## Token discipline
 
 - Read files partially when possible; do not re-read files already in context.
-- Load `skills/<domain>/` and `docs/*.md` only when working in that domain.
+- Skills live in `.claude/skills/<domain>/SKILL.md` (auto-discovered by Claude Code). Load them and `docs/*.md` only when working in that domain.
 - Tail/filter long command output (`| tail -30`, `grep`), e.g. docker logs, npm install.
 - No subagents unless the user asks.
-- Keep this file short (< 250 lines). Domain detail belongs in `skills/` and `docs/`.
+- Keep this file short (< 250 lines). Domain detail belongs in `.claude/skills/` and `docs/`.
 
 ## Hard rules
 
 - **No hallucinations.** Never invent APIs, library options, versions, CLI flags, env vars, files or endpoints. Inspect the repo / package metadata / official docs; state uncertainty.
 - **Never claim unverified work.** Use "implemented but not yet verified" or "implemented and verified with: `<cmd>`". No "production ready", "supports 10k vehicles", "exactly-once" without evidence.
-- **User instructions win**, then this file, then repo, then `docs/`, then `skills/`, then official docs.
+- **User instructions win**, then this file, then repo, then `docs/`, then `.claude/skills/`, then official docs.
 - **Stop and ask** on architectural changes, conflicting requirements, destructive actions, credentials.
 - Never commit secrets. `.env.example` has placeholders only.
 - Never destroy user work: no `reset --hard`, `clean`, force-push without explicit permission.
