@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// Phase 0 smoke test: starts each service's built process and checks
-// /health, /ready and the JSON 404 handler, then sends it SIGTERM and
-// confirms it exits. No Kafka/MQTT/DB involved yet (services don't wire
-// those in until Phase 1) — this only proves each service boots, serves
-// HTTP and shuts down cleanly.
+// Boot smoke test: starts each service's built process and checks /health,
+// /ready and the JSON 404 handler, then sends it SIGTERM and confirms it
+// exits. Needs no infrastructure: services with real dependencies are pointed
+// at unreachable addresses and must report /ready 503 while /health stays 200
+// (their happy path is covered by the per-service smoke tests, e.g.
+// `npm run smoke:ingestion`).
 
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -14,7 +15,12 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 const SERVICES = [
   { name: 'api-gateway', port: 3000 },
-  { name: 'iot-ingestion', port: 3001 },
+  {
+    name: 'iot-ingestion',
+    port: 3001,
+    env: { MQTT_URL: 'mqtt://127.0.0.1:1', KAFKA_BROKERS: '127.0.0.1:1' },
+    ready: { status: 503, body: { status: 'unavailable', checks: { mqtt: false, kafka: false } } },
+  },
   { name: 'telemetry', port: 3002 },
   { name: 'vehicle', port: 3003 },
   { name: 'alert', port: 3004 },
@@ -59,7 +65,9 @@ async function expectJson(url, expectedStatus, expectedBody) {
   }
 }
 
-async function checkService({ name, port }) {
+const READY_OK = { status: 200, body: { status: 'ok' } };
+
+async function checkService({ name, port, env = {}, ready = READY_OK }) {
   const cwd = path.join(ROOT, 'services', name);
   const entry = path.join(cwd, 'dist', 'index.js');
   if (!existsSync(entry)) {
@@ -68,7 +76,7 @@ async function checkService({ name, port }) {
 
   const child = spawn(process.execPath, ['dist/index.js'], {
     cwd,
-    env: { ...process.env, PORT: String(port) },
+    env: { ...process.env, ...env, PORT: String(port) },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
@@ -78,28 +86,33 @@ async function checkService({ name, port }) {
   });
 
   const base = `http://localhost:${port}`;
+  let result;
   try {
     await waitForHealth(`${base}/health`, START_TIMEOUT_MS);
     await expectJson(`${base}/health`, 200, { status: 'ok' });
-    await expectJson(`${base}/ready`, 200, { status: 'ok' });
+    await expectJson(`${base}/ready`, ready.status, ready.body);
     await expectJson(`${base}/__smoke_not_found__`, 404, { error: 'Not Found' });
-    return { name, ok: true };
+    result = { name, ok: true };
   } catch (err) {
-    return {
+    result = {
       name,
       ok: false,
       error: `${err.message}${stderr ? `\n  stderr: ${stderr.trim()}` : ''}`,
     };
-  } finally {
-    child.kill('SIGTERM');
-    const exited = await Promise.race([
-      new Promise((resolve) => child.once('exit', () => resolve(true))),
-      sleep(3000).then(() => false),
-    ]);
-    if (!exited) {
-      child.kill('SIGKILL');
+  }
+
+  child.kill('SIGTERM');
+  const exited = await Promise.race([
+    new Promise((resolve) => child.once('exit', () => resolve(true))),
+    sleep(3000).then(() => false),
+  ]);
+  if (!exited) {
+    child.kill('SIGKILL');
+    if (result.ok) {
+      result = { name, ok: false, error: 'did not exit within 3s of SIGTERM (SIGKILLed)' };
     }
   }
+  return result;
 }
 
 async function main() {

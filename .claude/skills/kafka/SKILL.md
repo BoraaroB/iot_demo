@@ -11,7 +11,7 @@ Kafka is the backbone between ingestion and the three domain consumers (`telemet
 plus `realtime`. Getting topic/partition/idempotency conventions right early avoids a schema-registry-style
 retrofit later (which `CLAUDE.md` explicitly says to avoid).
 
-## Current state (as of step 1.1)
+## Current state (as of step 1.2)
 
 Broker is up in `docker-compose.yml` (`apache/kafka:4.3.1`, KRaft mode, single-node combined
 broker+controller) with `auto.create.topics.enable=false`. The six contract topics are created by the
@@ -19,7 +19,18 @@ one-shot `kafka-init` compose service (`infrastructure/kafka/create-topics.sh`, 
 `vehicle.telemetry`/`vehicle.location` 6 partitions, the rest 3, RF 1. Adding a topic means updating
 `kafkaTopics` in `packages/events/src/topics.ts`, `create-topics.sh` and `docs/contracts.md` together —
 `npm run smoke:kafka` fails on drift. Client library: `kafkajs` (see `PROGRESS.md` Decisions for the
-maintenance trade-off). No producers/consumers wired yet (step 1.2+).
+maintenance trade-off).
+
+First producer: `iot-ingestion` (`services/iot-ingestion/src/kafka.ts`) — `acks: -1`, explicit
+`Partitioners.DefaultPartitioner` (murmur2, Java-compatible), `allowAutoTopicCreation: false`, key =
+`vehicleId`, in-flight sends capped by `INGEST_MAX_IN_FLIGHT` (excess dropped, not buffered). Env:
+`KAFKA_BROKERS` (host `localhost:9092`; inside compose **must** be `kafka:19092` — the host listener
+advertises `localhost`, which fails from a container), `KAFKA_CLIENT_ID`. No consumers yet (step 1.3).
+
+kafkajs gotchas (verified): the producer `DISCONNECT` event fires only on explicit `disconnect()`, not on
+broker loss — readiness uses a periodic `admin.describeCluster()` probe instead. On Node 24, kafkajs emits
+a harmless `TimeoutNegativeWarning` from `RequestQueue.scheduleCheckPendingRequests` (negative delay
+clamped to 1 ms).
 
 ## Topics (`docs/contracts.md`)
 

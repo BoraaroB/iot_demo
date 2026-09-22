@@ -6,10 +6,10 @@
 ## Current position
 
 - **Phase:** 1 — Telemetry pipeline E2E
-- **Step:** 1.1 done (Kafka topics created explicitly)
-- **Branch:** `feat/1.1-kafka-topics`
+- **Step:** 1.2 done (`iot-ingestion` MQTT → Kafka bridge)
+- **Branch:** `feat/1.2-iot-ingestion-bridge`
 - **Last tag:** `v0.1.0`
-- **Next step:** 1.2 — `iot-ingestion` MQTT → Kafka bridge
+- **Next step:** 1.3 — `telemetry`: migration (hypertable) + Kafka consumer → TimescaleDB
 
 Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 
@@ -28,7 +28,7 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
   - [x] 0.10 full verification → tagged `v0.1.0`
 - [~] **Phase 1 — Telemetry pipeline E2E** (simulator → MQTT → ingestion → Kafka → telemetry → TimescaleDB) → `v0.2.0`
   - [x] 1.1 Kafka topics created explicitly: `kafka-init` one-shot compose service (`infrastructure/kafka/create-topics.sh`, idempotent), broker auto-create disabled, `npm run smoke:kafka` checks broker topics against `@iiot/events` `kafkaTopics`
-  - [ ] 1.2 `iot-ingestion`: MQTT subscribe (wildcard) → Zod payload validation → `EventEnvelope` → Kafka producer (key = `vehicleId`); `/ready` checks MQTT + Kafka for real
+  - [x] 1.2 `iot-ingestion`: MQTT shared subscription (`$share/iot-ingestion/factory/+/vehicle/+/{telemetry,status}`, QoS 1) → Zod payload validation (`telemetryPayloadSchema`/`statusPayloadSchema` in `@iiot/events`) → `EventEnvelope` → Kafka (`vehicle.telemetry`/`vehicle.status`, key = `vehicleId`, `acks: -1`); malformed messages logged + dropped; in-flight sends capped; `/ready` reports MQTT + Kafka (probe-based); `npm run smoke:ingestion`
   - [ ] 1.3 `telemetry`: `node-pg-migrate` migration (telemetry hypertable) + Kafka consumer → TimescaleDB, idempotent on `eventId`; `/ready` checks Kafka + DB
   - [ ] 1.4 `simulator`: basic telemetry publisher over MQTT (vehicle count + publish rate from env)
   - [ ] 1.5 E2E smoke test MQTT → Kafka → TimescaleDB (`npm run smoke:e2e`)
@@ -60,6 +60,7 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 | 2026-09-22 | Step 0.10 full verification against `instruction_plan.md` §32 acceptance criteria: `npm run typecheck`, `npm run lint`, `npm run format:check` (all clean); `npm run smoke` (7/7 services `/health`+`/ready`+404, ports released after); `docker build` for all 7 services (all succeeded, throwaway `:v0.1.0-verify` tags removed after); `docker compose config` + `docker compose up -d` (all 6 infra services reached `healthy`, `docker port` confirmed every host port actually bound), `docker compose down` (clean teardown); `git ls-files \| grep env` → only `.env.example` tracked, `.gitignore` excludes `.env*` | PASS |
 | 2026-09-22 | Moved `skills/` → `.claude/skills/`: `git status` shows 14 renames (R); Claude Code session listed all 14 skills (`architecture` … `websocket`) as available immediately after the move (auto-discovery confirmed); `grep -rn "skills/"` → only historical CHANGELOG/PROGRESS entries and `instruction_plan.md` (original spec, left unchanged) still use the old path; `npx prettier --check .` | PASS |
 | 2026-09-22 | Step 1.1: `docker compose config -q`; `docker compose up -d kafka kafka-init` → 6 topics created, `iiot-kafka-init` exit 0; re-ran `docker compose up kafka-init` → exit 0, no duplicates (idempotent); `kafka-configs.sh --describe --all` → `auto.create.topics.enable=false` (`STATIC_BROKER_CONFIG`); `kafka-console-producer.sh --topic no.such.topic` → `UNKNOWN_TOPIC_OR_PARTITION`, topic not created; `npm run smoke:kafka` → 6/6 PASS (exit 0); negative check: created stray `vehicle.telemtry` → `smoke:kafka` exit 1 naming it, deleted it → exit 0 again; `npm run typecheck`, `npm run lint`, `npx prettier --check .` clean | PASS |
+| 2026-09-22 | Step 1.2: `npm run typecheck`, `npm run lint`, `npm run format:check` clean; `npm run smoke` 7/7 (iot-ingestion pointed at unreachable brokers → `/ready` `503 {"status":"unavailable","checks":{"mqtt":false,"kafka":false}}`, exits on `SIGTERM`); `npm run smoke:ingestion` 5/5 against real EMQX + Kafka (non-JSON + out-of-range telemetry dropped, valid telemetry + status arrive exactly once as envelopes keyed by `vehicleId`, payload intact, exit 0 on `SIGTERM`); `npm run smoke:kafka` 6/6; manual outage test: `docker stop iiot-kafka` → `/ready` `kafka:false` within ~9s, `docker start` → `true` within ~6s; `docker stop iiot-emqx` → `mqtt:false`, restart → reconnected + resubscribed; `docker build` iot-ingestion + telemetry; iot-ingestion container on `iiot_iiot-network` (`kafka:19092`, `mqtt://emqx:1883`) → `/ready` 200, `whoami` → `iiot`, `docker stop` → exit 0; telemetry image confirmed not to contain `kafkajs`/`mqtt` | PASS |
 
 ## Environment (verified 2026-09-21)
 
@@ -97,7 +98,15 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 - 2026-09-22: **Kafka client: `kafkajs@2.2.4`** (user choice). Known trade-off, recorded on purpose: its last release was 2023-02-27 (`npm view kafkajs time.modified`) and it is no longer actively maintained. Alternatives checked the same day: `@platformatic/kafka@2.11.0` (pure JS, maintained) and `@confluentinc/kafka-javascript@1.10.1` (librdkafka, native). Revisit if kafkajs breaks against Kafka 4.x or Node 24.
 - 2026-09-22: **DB migrations: `node-pg-migrate`** (9.0.0 at time of choice, SQL migrations, not an ORM). First used in step 1.3 for the TimescaleDB telemetry hypertable.
 - 2026-09-22: **Kafka topics created explicitly, auto-create off.** One-shot `kafka-init` compose service (same `apache/kafka:4.3.1` image, so `kafka-topics.sh` is guaranteed present) instead of a host script, so a plain `docker compose up` gives a usable broker with no host tooling. Partitions: `vehicle.telemetry`/`vehicle.location` 6, others 3 (partition count caps consumer parallelism per group; can be increased later, never decreased). RF 1 (single node). Retention left at broker default (7 days) until telemetry volume is measured. Topic list is duplicated in `create-topics.sh` (bash can't import TS); `npm run smoke:kafka` catches drift against `@iiot/events`.
+- 2026-09-22: **MQTT client: `mqtt@5.16.0`** (checked `npm view mqtt`, published 2026-09-16). Also added with `kafkajs` as root devDependencies, because the `scripts/*.mjs` smoke tests import them directly (previously they only worked because npm happened to hoist them).
+- 2026-09-22: **Payload contract v1** (`packages/events/src/payloads.ts`, `docs/contracts.md` "Payloads"): telemetry `{timestamp,x,y,speed,battery,temperature}`, status `{timestamp,status: idle|moving|charging|error}`. Identity comes from the MQTT topic only. Unknown keys are stripped. The envelope `timestamp` is ingestion time; the payload `timestamp` is device time. Mapping is 1:1: MQTT telemetry → `vehicle.telemetry`, status → `vehicle.status`. `vehicle.location` is not produced yet (telemetry already carries `x`/`y`); decide in Phase 2/3 who derives it.
+- 2026-09-22: **EMQX shared subscription** for `iot-ingestion` (`$share/<group>/...`), so scaling to N replicas splits messages instead of forwarding each one N times.
+- 2026-09-22: **iot-ingestion delivery semantics (as built, not end-to-end at-least-once):** MQTT QoS 1 is acked by mqtt.js on receipt, before the Kafka send completes, and the session is clean. A crash, a Kafka send failure (logged at error) or the in-flight cap (`INGEST_MAX_IN_FLIGHT`, default 1000 → excess dropped with a warn) can therefore lose messages. This is acceptable for telemetry for now. Revisit before commands (Phase 5) or if loss is measured to matter.
+- 2026-09-22: **Kafka readiness via probe:** kafkajs' producer `DISCONNECT` event did not fire when the broker was stopped (reproduced), so `/ready` uses a 5s `admin.describeCluster()` probe (3s timeout, no retries, never overlapping) plus immediate "down" on a failed send.
+- 2026-09-22: **`npm run smoke` now covers services with real dependencies** by pointing them at unreachable addresses (`127.0.0.1:1`) and expecting `/ready` 503. The happy path lives in per-service smoke tests (`smoke:ingestion`). It also fails if a service needs `SIGKILL` after `SIGTERM` (previously it fell back to `SIGKILL` silently).
 
 ## Known issues
 
-None open.
+- kafkajs 2.2.4 on Node 24 prints `TimeoutNegativeWarning` once per process (`RequestQueue.scheduleCheckPendingRequests`, negative delay clamped to 1 ms). Harmless, not suppressed. Another data point for the kafkajs revisit in Decisions.
+- iot-ingestion sends one Kafka request per MQTT message (no batching). Throughput has not been measured; Phase 10 load tests decide whether batching is needed.
+- `smoke:ingestion` consumes with `fromBeginning: true`, filtered by a unique `vehicleId`. Runtime grows with topic size (7-day retention); fine for local dev.
