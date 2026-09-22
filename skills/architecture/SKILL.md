@@ -11,15 +11,10 @@ Keep the system's shape consistent across 11 phases built incrementally by diffe
 single place that states what the topology *is* and why — everything else (services, docs, skills) must
 agree with it.
 
-## Topology (protected — see `CLAUDE.md` "Architecture")
+## Topology (protected)
 
-```text
-Vehicles/Simulator --MQTT--> EMQX --> iot-ingestion --Kafka--> telemetry  -> TimescaleDB
-                                                         +--> vehicle    -> PostgreSQL (+ Redis runtime state)
-                                                         +--> alert      -> PostgreSQL / Redis
-                                                         +--> realtime --WebSocket--> Next.js web
-Client --HTTP--> api-gateway --> vehicle | telemetry | alert
-```
+The topology diagram lives only in `CLAUDE.md` "Architecture" (single source of truth — not copied here).
+What each node is allowed to do:
 
 - `iot-ingestion` is the *only* service that speaks MQTT. It bridges MQTT → Kafka and does nothing else
   (no business logic, no DB writes).

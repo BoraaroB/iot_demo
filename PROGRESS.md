@@ -5,17 +5,17 @@
 
 ## Current position
 
-- **Phase:** 0 — Bootstrap
-- **Step:** 0.9 done (`skills/` — 14 domain skills)
+- **Phase:** 0 — Bootstrap (complete)
+- **Step:** 0.10 done (full verification, tagged)
 - **Branch:** `main`
-- **Last tag:** none
-- **Next step:** 0.10 — full verification → tag `v0.1.0`
+- **Last tag:** `v0.1.0`
+- **Next step:** Phase 1 — Telemetry pipeline E2E (simulator → MQTT → ingestion → Kafka → telemetry → TimescaleDB)
 
 Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 
 ## Phases
 
-- [~] **Phase 0 — Bootstrap** → `v0.1.0`
+- [x] **Phase 0 — Bootstrap** → `v0.1.0`
   - [x] 0.1 git init, `.gitignore`, `CLAUDE.md`, `PROGRESS.md`, `CHANGELOG.md`
   - [x] 0.2 npm workspaces root, shared TS config, lint + format scripts (typecheck script deferred to 0.3 — no `.ts` files exist yet)
   - [x] 0.3 `packages/` — types (EventEnvelope + id aliases), events (topics + envelope create/parse via Zod), logger (Pino wrapper), config (env loader via Zod). Root `tsconfig.json` (project references) + `typecheck` script added.
@@ -25,7 +25,7 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
   - [x] 0.7 `npm run smoke` (`scripts/smoke.mjs`) — boots each service's built `dist/index.js` on its assigned port, polls until up, asserts `/health`+`/ready` return `200 {"status":"ok"}` and an unknown route returns the JSON 404 handler, then `SIGTERM`s it and confirms exit
   - [x] 0.8 `docs/` (only what exists) + trim `CLAUDE.md` to ~80–90 lines: moved Repository layout, Contracts, API versioning and Git & versioning sections out of `CLAUDE.md` into `docs/repository-layout.md`, `docs/contracts.md`, `docs/api-versioning.md`, `docs/git-workflow.md`, replaced with one-line links. `CLAUDE.md` 139 → 89 lines. Also fixed the pre-existing `docker-compose.yml` Prettier formatting issue (known issue from 0.6/0.7).
   - [x] 0.9 `skills/` (14 short, project-specific skills): `architecture`, `backend`, `frontend`, `kafka`, `mqtt`, `websocket`, `database`, `docker`, `simulator`, `testing`, `observability`, `security`, `load-testing`, `deployment`. Each `skills/<domain>/SKILL.md` covers purpose, current implementation status (most domains are Phase-1+ scope, not started yet — skills say so explicitly rather than describing unbuilt code as if it exists), conventions, rules, anti-patterns, and verification steps, cross-linked to each other and to `docs/*.md`/`CLAUDE.md` rather than duplicating their content.
-  - [ ] 0.10 full verification → tag `v0.1.0`
+  - [x] 0.10 full verification → tagged `v0.1.0`
 - [ ] **Phase 1 — Telemetry pipeline E2E** (simulator → MQTT → ingestion → Kafka → telemetry → TimescaleDB) → `v0.2.0`
 - [ ] **Phase 2 — Realtime + first dashboard** (WebSocket, Next.js live map) → `v0.3.0`
 - [ ] **Phase 3 — Domain model, Vehicle service, API Gateway `/api/v1`** → `v0.4.0`
@@ -51,6 +51,7 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 | 2026-09-22 | `npm run typecheck` (rebuild `dist/`), `npm run smoke` — all 7 services booted, `/health`+`/ready` → `200 {"status":"ok"}`, unknown route → `404 {"error":"Not Found"}`; `lsof -i :3000-3006` after the run confirmed every port released (clean `SIGTERM` exit, no `SIGKILL` fallback needed); `npm run lint` and `npm run format:check` clean on `scripts/smoke.mjs` | PASS |
 | 2026-09-22 | `npx prettier --write docker-compose.yml` (fixed pre-existing known issue), `npx prettier --check .` → clean; `npm run lint`, `npm run typecheck` → clean (no `.ts` changes in this step, ran per Definition of Done) | PASS |
 | 2026-09-22 | `npx prettier --check skills/` → clean (all 14 `skills/<domain>/SKILL.md` files); manual review of each file against required sections (purpose, responsibilities, rules, conventions, anti-patterns, verification, relevant commands, architecture constraints) per `instruction_plan.md` §29; no `.ts` changes, `npm run lint`/`npm run typecheck` not re-run (no code touched) | PASS |
+| 2026-09-22 | Step 0.10 full verification against `instruction_plan.md` §32 acceptance criteria: `npm run typecheck`, `npm run lint`, `npm run format:check` (all clean); `npm run smoke` (7/7 services `/health`+`/ready`+404, ports released after); `docker build` for all 7 services (all succeeded, throwaway `:v0.1.0-verify` tags removed after); `docker compose config` + `docker compose up -d` (all 6 infra services reached `healthy`, `docker port` confirmed every host port actually bound), `docker compose down` (clean teardown); `git ls-files \| grep env` → only `.env.example` tracked, `.gitignore` excludes `.env*` | PASS |
 
 ## Environment (verified 2026-09-21)
 

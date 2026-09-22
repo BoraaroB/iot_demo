@@ -7,6 +7,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Each com
 
 ## [Unreleased]
 
+### Changed
+- `skills/architecture/SKILL.md`: removed the duplicated topology diagram; it now references `CLAUDE.md` "Architecture" as the single source of truth.
+
+## [0.1.0] - 2026-09-22
+
 ### Added
 - Git repository (`main` branch), `.gitignore`.
 - `CLAUDE.md` (condensed agent rules), `PROGRESS.md` (progress tracker), `CHANGELOG.md`.
@@ -33,3 +38,4 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Each com
 - Services use Express `^5.2.1` (native async error forwarding, no `express-async-errors` needed) and `pino-http@^11.0.0` for request logging.
 - `docker-compose.yml` host ports for TimescaleDB (`5434`) and Redis (`6380`) are shifted off their defaults (`5432`+1, `6379`+1) — this machine already had unrelated containers (`ft-postgres`, `ft-redis`) bound to `5433`/`6379`. Override via `.env` if these still collide locally.
 - `postgres:18-alpine` changed its data volume convention: mount `/var/lib/postgresql` (the image manages a versioned subdirectory itself), not `/var/lib/postgresql/data` as in `postgres:17` and earlier — mounting the old path errors out with a `pg_ctlcluster`-compatibility message. `timescale/timescaledb` (not `docker-library/postgres`-derived) is unaffected and still uses `/var/lib/postgresql/data`.
+- Phase 0 acceptance criteria (`instruction_plan.md` §32) verified end-to-end: `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run smoke` (7/7 services), `docker build` for all 7 services, `docker compose up` (all 6 infra services healthy, host ports confirmed bound via `docker port`), no secrets committed (only `.env.example`, gitignored `.env*`). Tagged `v0.1.0`.
