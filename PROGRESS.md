@@ -6,10 +6,10 @@
 ## Current position
 
 - **Phase:** 0 — Bootstrap
-- **Step:** 0.6 done (`docker-compose.yml` — Kafka KRaft, Postgres, TimescaleDB, Redis, EMQX, Kafka UI)
+- **Step:** 0.7 done (`npm run smoke` — boots all 7 services, checks `/health`+`/ready`+404, verifies graceful shutdown)
 - **Branch:** `main`
 - **Last tag:** none
-- **Next step:** 0.7 — `npm run smoke` (health/ready of all services)
+- **Next step:** 0.8 — `docs/` (only what exists) + trim `CLAUDE.md` to ~80–90 lines
 
 Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 
@@ -22,7 +22,7 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
   - [x] 0.4 service skeletons (7): `api-gateway`(3000), `iot-ingestion`(3001), `telemetry`(3002), `vehicle`(3003), `alert`(3004), `realtime`(3005), `simulator`(3006). Each: Express app, `/health` (process only), `/ready` (mirrors `/health` for now — no dependencies wired yet), `pino-http` request logging via `@iiot/logger`, JSON error handler + 404, Zod env schema (`@iiot/config`'s `baseEnvSchema` + `PORT`), graceful shutdown on `SIGTERM`/`SIGINT`. All depend on `@iiot/{types,events,logger,config}`; only `logger`+`config` are imported so far (`types`/`events` wired in when Kafka/MQTT land in Phase 1).
   - [x] 0.5 Dockerfiles (multi-stage, non-root): `deps` → `build` → `prod-deps` → `runtime`, non-root `iiot` user, `HEALTHCHECK` against `/health`. One template (`infrastructure/docker/Dockerfile.service.template`) generates all 7 (`generate-dockerfiles.sh`) since dependency sets are currently identical across services.
   - [x] 0.6 `docker-compose.yml` — Kafka (KRaft, single-node combined broker+controller), Postgres (`vehicle_db`+`alert_db`), TimescaleDB (`telemetry_db`), Redis, EMQX, Kafka UI (`kafbat` fork). All 6 with healthchecks, bind-mount persistence (`.data/`, gitignored), `.env.example`.
-  - [ ] 0.7 `npm run smoke` (health/ready of all services)
+  - [x] 0.7 `npm run smoke` (`scripts/smoke.mjs`) — boots each service's built `dist/index.js` on its assigned port, polls until up, asserts `/health`+`/ready` return `200 {"status":"ok"}` and an unknown route returns the JSON 404 handler, then `SIGTERM`s it and confirms exit
   - [ ] 0.8 `docs/` (only what exists) + trim `CLAUDE.md` to ~80–90 lines: move Git/API versioning, Contracts and Repository layout into `docs/` / `README.md`, keep one-line links
   - [ ] 0.9 `skills/` (14 short, project-specific skills)
   - [ ] 0.10 full verification → tag `v0.1.0`
@@ -48,6 +48,7 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 | 2026-09-21 | `npm run typecheck`, `npm run lint`, `npm run format:check` (all 7 services); runtime: built + ran `api-gateway` and `iot-ingestion`, curled `/health`, `/ready`, an unknown route (404 JSON), verified `pino-http` request logs, then sent `SIGTERM` and confirmed graceful shutdown log + connection refused after | PASS |
 | 2026-09-21 | `docker build -f services/<name>/Dockerfile -t iiot/<name>:dev .` for all 7 services (PASS, ~176MB each); ran `api-gateway` and `vehicle` containers, curled `/health` + `/ready` (200 `{"status":"ok"}`), `docker exec ... whoami` → `iiot` (non-root confirmed), `docker inspect --format='{{json .State.Health}}'` → `"healthy"` after `start-period`; test images/containers removed after verification | PASS |
 | 2026-09-22 | `docker compose config` (syntax), `docker compose up -d`, `docker compose ps` — all 6 services reached `healthy`; `docker exec iiot-postgres psql ... \l` confirmed `vehicle_db`+`alert_db`; `docker exec iiot-timescaledb psql -c "SELECT extname,extversion FROM pg_extension WHERE extname='timescaledb'"` → `2.24.0`; `docker exec iiot-redis redis-cli set/get` roundtrip; `docker exec iiot-kafka kafka-topics.sh --create/--list/--delete` roundtrip; `curl http://localhost:8080/` (Kafka UI) → 200; `curl http://localhost:18083/status` (EMQX dashboard) → 200; `docker port <container>` checked for every service to confirm host bindings actually took (caught a silent Redis bind failure — see Decisions); `docker compose down` — clean teardown, `.data/` bind mounts persisted | PASS |
+| 2026-09-22 | `npm run typecheck` (rebuild `dist/`), `npm run smoke` — all 7 services booted, `/health`+`/ready` → `200 {"status":"ok"}`, unknown route → `404 {"error":"Not Found"}`; `lsof -i :3000-3006` after the run confirmed every port released (clean `SIGTERM` exit, no `SIGKILL` fallback needed); `npm run lint` and `npm run format:check` clean on `scripts/smoke.mjs` | PASS |
 
 ## Environment (verified 2026-09-21)
 
@@ -84,4 +85,4 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 
 ## Known issues
 
-- None yet.
+- `npm run format:check` flags `docker-compose.yml` (pre-existing, from step 0.6 — not touched in 0.7). Fix in step 0.8 alongside other doc/config cleanup.

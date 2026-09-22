@@ -17,7 +17,8 @@
     "clean": "tsc --build tsconfig.json --clean",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "smoke": "node scripts/smoke.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.13.6",
