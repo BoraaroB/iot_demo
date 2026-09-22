@@ -6,10 +6,10 @@
 ## Current position
 
 - **Phase:** 0 — Bootstrap
-- **Step:** 0.8 done (`docs/` created, `CLAUDE.md` trimmed to 89 lines)
+- **Step:** 0.9 done (`skills/` — 14 domain skills)
 - **Branch:** `main`
 - **Last tag:** none
-- **Next step:** 0.9 — `skills/` (14 short, project-specific skills)
+- **Next step:** 0.10 — full verification → tag `v0.1.0`
 
 Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 
@@ -24,7 +24,7 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
   - [x] 0.6 `docker-compose.yml` — Kafka (KRaft, single-node combined broker+controller), Postgres (`vehicle_db`+`alert_db`), TimescaleDB (`telemetry_db`), Redis, EMQX, Kafka UI (`kafbat` fork). All 6 with healthchecks, bind-mount persistence (`.data/`, gitignored), `.env.example`.
   - [x] 0.7 `npm run smoke` (`scripts/smoke.mjs`) — boots each service's built `dist/index.js` on its assigned port, polls until up, asserts `/health`+`/ready` return `200 {"status":"ok"}` and an unknown route returns the JSON 404 handler, then `SIGTERM`s it and confirms exit
   - [x] 0.8 `docs/` (only what exists) + trim `CLAUDE.md` to ~80–90 lines: moved Repository layout, Contracts, API versioning and Git & versioning sections out of `CLAUDE.md` into `docs/repository-layout.md`, `docs/contracts.md`, `docs/api-versioning.md`, `docs/git-workflow.md`, replaced with one-line links. `CLAUDE.md` 139 → 89 lines. Also fixed the pre-existing `docker-compose.yml` Prettier formatting issue (known issue from 0.6/0.7).
-  - [ ] 0.9 `skills/` (14 short, project-specific skills)
+  - [x] 0.9 `skills/` (14 short, project-specific skills): `architecture`, `backend`, `frontend`, `kafka`, `mqtt`, `websocket`, `database`, `docker`, `simulator`, `testing`, `observability`, `security`, `load-testing`, `deployment`. Each `skills/<domain>/SKILL.md` covers purpose, current implementation status (most domains are Phase-1+ scope, not started yet — skills say so explicitly rather than describing unbuilt code as if it exists), conventions, rules, anti-patterns, and verification steps, cross-linked to each other and to `docs/*.md`/`CLAUDE.md` rather than duplicating their content.
   - [ ] 0.10 full verification → tag `v0.1.0`
 - [ ] **Phase 1 — Telemetry pipeline E2E** (simulator → MQTT → ingestion → Kafka → telemetry → TimescaleDB) → `v0.2.0`
 - [ ] **Phase 2 — Realtime + first dashboard** (WebSocket, Next.js live map) → `v0.3.0`
@@ -50,6 +50,7 @@ Legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 | 2026-09-22 | `docker compose config` (syntax), `docker compose up -d`, `docker compose ps` — all 6 services reached `healthy`; `docker exec iiot-postgres psql ... \l` confirmed `vehicle_db`+`alert_db`; `docker exec iiot-timescaledb psql -c "SELECT extname,extversion FROM pg_extension WHERE extname='timescaledb'"` → `2.24.0`; `docker exec iiot-redis redis-cli set/get` roundtrip; `docker exec iiot-kafka kafka-topics.sh --create/--list/--delete` roundtrip; `curl http://localhost:8080/` (Kafka UI) → 200; `curl http://localhost:18083/status` (EMQX dashboard) → 200; `docker port <container>` checked for every service to confirm host bindings actually took (caught a silent Redis bind failure — see Decisions); `docker compose down` — clean teardown, `.data/` bind mounts persisted | PASS |
 | 2026-09-22 | `npm run typecheck` (rebuild `dist/`), `npm run smoke` — all 7 services booted, `/health`+`/ready` → `200 {"status":"ok"}`, unknown route → `404 {"error":"Not Found"}`; `lsof -i :3000-3006` after the run confirmed every port released (clean `SIGTERM` exit, no `SIGKILL` fallback needed); `npm run lint` and `npm run format:check` clean on `scripts/smoke.mjs` | PASS |
 | 2026-09-22 | `npx prettier --write docker-compose.yml` (fixed pre-existing known issue), `npx prettier --check .` → clean; `npm run lint`, `npm run typecheck` → clean (no `.ts` changes in this step, ran per Definition of Done) | PASS |
+| 2026-09-22 | `npx prettier --check skills/` → clean (all 14 `skills/<domain>/SKILL.md` files); manual review of each file against required sections (purpose, responsibilities, rules, conventions, anti-patterns, verification, relevant commands, architecture constraints) per `instruction_plan.md` §29; no `.ts` changes, `npm run lint`/`npm run typecheck` not re-run (no code touched) | PASS |
 
 ## Environment (verified 2026-09-21)
 
