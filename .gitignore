@@ -31,3 +31,6 @@ test-results/
 
 # Local docker volumes
 .data/
+
+# Claude Code personal settings (shared: .claude/settings.json, .claude/skills/)
+.claude/settings.local.json
