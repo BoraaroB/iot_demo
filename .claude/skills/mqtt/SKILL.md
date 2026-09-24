@@ -50,7 +50,7 @@ factory/{factoryId}/vehicle/{vehicleId}/command
 
 ## Anti-patterns
 
-- Any service other than `iot-ingestion` opening an MQTT connection.
+- Any platform service other than `iot-ingestion` opening an MQTT connection (`simulator` is the exception: it plays the vehicles, i.e. the client side).
 - Business logic (alerting, persistence) living inside the MQTT bridge instead of downstream Kafka
   consumers.
 - Swapping MQTT for HTTP polling from vehicles — protected architectural decision.

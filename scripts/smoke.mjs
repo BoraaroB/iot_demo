@@ -30,7 +30,12 @@ const SERVICES = [
   { name: 'vehicle', port: 3003 },
   { name: 'alert', port: 3004 },
   { name: 'realtime', port: 3005 },
-  { name: 'simulator', port: 3006 },
+  {
+    name: 'simulator',
+    port: 3006,
+    env: { MQTT_URL: 'mqtt://127.0.0.1:1' },
+    ready: { status: 503, body: { status: 'unavailable', checks: { mqtt: false } } },
+  },
 ];
 
 const START_TIMEOUT_MS = 5000;

@@ -11,10 +11,14 @@ description: Fake-vehicle telemetry/mission generator conventions. Read before i
 WebSocket → UI) can be built and load-tested without physical hardware. It is a normal service in this
 repo, not a throwaway script — same skeleton conventions as the rest ([[backend]]).
 
-## Current state (as of Phase 0)
+## Current state (as of step 1.4)
 
-Skeleton only (port 3006), `/health` + `/ready`, no publish logic yet. Basic telemetry generation is Phase
-1 scope; realistic movement, missions, and command handling are explicitly deferred to Phase 5
+Basic publisher (port 3006): one MQTT client (`mqtt@5`) publishes for `SIM_VEHICLE_COUNT` vehicles
+(`<SIM_VEHICLE_ID_PREFIX>-0001` ...) in `SIM_FACTORY_ID`, telemetry every `SIM_PUBLISH_INTERVAL_MS` (QoS 1),
+status on change + after every (re)connect. `src/vehicle.ts` is a deterministic model (circular loop,
+acceleration, battery drain, charge in place 20 → 95 %, temperature follows load); `src/simulation.ts` owns
+the MQTT client and per-vehicle timers (offset across the interval, ticks skipped while offline — never
+buffered). `/ready` reports `mqtt`. Run: `SIM_VEHICLE_COUNT=N npm run simulate`. Remaining work: realistic movement, missions, and command handling are explicitly deferred to Phase 5
 ("Realistic simulator, missions, commands") — don't build mission logic while Phase 1 is in progress.
 
 ## Conventions (to apply as it's built)
@@ -39,8 +43,8 @@ Skeleton only (port 3006), `/health` + `/ready`, no publish logic yet. Basic tel
 
 ## Verification
 
-Manual: run the simulator against local EMQX, confirm `iot-ingestion` logs show received+forwarded events
-(same check as [[mqtt]]'s verification). Once Phase 1's E2E smoke test exists, the simulator is what drives
+`npm run smoke:simulator` (needs `docker compose up -d emqx`): every vehicle announces status and publishes
+schema-valid telemetry with advancing time/position, exit 0 on `SIGTERM`. Once Phase 1's E2E smoke test exists, the simulator is what drives
 it.
 
 ## Related
