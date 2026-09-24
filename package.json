@@ -23,6 +23,7 @@
     "smoke:ingestion": "node scripts/smoke-ingestion.mjs",
     "smoke:telemetry": "node scripts/smoke-telemetry.mjs",
     "smoke:simulator": "node scripts/smoke-simulator.mjs",
+    "smoke:e2e": "node scripts/smoke-e2e.mjs",
     "simulate": "node services/simulator/dist/index.js"
   },
   "devDependencies": {
